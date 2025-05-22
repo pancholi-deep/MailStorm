@@ -1,6 +1,10 @@
-import React, { useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useContext } from "react";
+import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../AuthContext'; // Adjust the path if needed
 
 export default function EmailForm() {
+  const navigate = useNavigate();
+  const { user, setUser, logout } = useContext(AuthContext);
   const [csvFile, setCsvFile] = useState(null);
   const [templateFile, setTemplateFile] = useState(null);
   const [csvError, setCsvError] = useState("");
@@ -10,6 +14,20 @@ export default function EmailForm() {
   const [darkMode, setDarkMode] = useState(false);
   const eventSourceRef = useRef(null);
   const abortControllerRef = useRef(null); // Added for aborting fetch
+
+  useEffect(() => {
+    if (!user) {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
+      }
+    }
+  }, [user, setUser]);  
+
+  const handleLogout = () => {
+    logout(); 
+    navigate('/login');
+  };
 
   const personalEmailDomains = [
     "gmail.com",
@@ -229,6 +247,17 @@ export default function EmailForm() {
               aria-label="Toggle dark mode"
             >
               {darkMode ? "🌙" : "☀️"}
+            </button>
+          </div>
+
+          <div className="p-8">
+            <h1 className="text-2xl font-bold">Welcome, {user?.name}</h1>
+            <p>Email: {user?.email}</p>
+            <button
+              className="mt-4 bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded"
+              onClick={handleLogout}
+            >
+              Sign Out
             </button>
           </div>
 

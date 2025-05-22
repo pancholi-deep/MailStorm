@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from email_utils import send_email as send_email_sync
+from auth import router as auth_router
 import io, csv, os, asyncio
 
 from dotenv import load_dotenv
@@ -9,6 +10,7 @@ load_dotenv()
 
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+REDIRECT_URL = os.getenv("REDIRECT_URL")
 
 if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
     raise RuntimeError("EMAIL_ADDRESS or EMAIL_PASSWORD environment variable not set.")
@@ -16,10 +18,11 @@ if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # your React app URL
+    allow_origins=[REDIRECT_URL],  # your React app URL
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth_router)
 
 async def send_email(name, recipient_email, subject, body, email_address, email_password):
     loop = asyncio.get_running_loop()

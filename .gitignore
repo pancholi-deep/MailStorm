@@ -6,8 +6,10 @@ build/
 
 # Environment variables
 .env
+.gitignore
 
 # Optional: logs and OS files
 *.log
 .DS_Store
-    
+
+client_secret_465815423693-uslgljs5n441mg70odibtdk5avtm3gbe.apps.googleusercontent.com.json    
