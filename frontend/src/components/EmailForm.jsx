@@ -165,6 +165,7 @@ export default function EmailForm() {
     abortControllerRef.current = new AbortController();
 
     const formData = new FormData();
+    formData.append("email", user.email);
     formData.append("csv_file", csvFile);
     formData.append("template_file", templateFile);
 

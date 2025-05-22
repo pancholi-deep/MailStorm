@@ -32,7 +32,14 @@ const Login = ({ setUser }) => {
 
       window.google.accounts.id.renderButton(
         document.getElementById('google-signin-button'),
-        { theme: 'outline', size: 'large' }
+        {
+          theme: 'outline',
+          size: 'large',
+          shape: 'pill',
+          logo_alignment: 'center',
+          width: 300,
+          type: 'standard'
+        }
       );
     } else {
       console.warn('Google API not loaded yet.');
@@ -47,16 +54,11 @@ const Login = ({ setUser }) => {
           <span className="ml-3 text-gray-600 dark:text-gray-400 text-xl font-light">Mass Mailer</span>
         </h1>
       </header>
-
-      <main className="bg-white dark:bg-gray-800 p-10 rounded-lg shadow-lg w-full max-w-sm text-center">
-        <h2 className="text-2xl font-semibold mb-6 text-gray-800 dark:text-gray-200">
-          Sign in with Google
-        </h2>
-        <div id="google-signin-button" className="mx-auto"></div>
-      </main>
+      <div id="google-signin-button" className="mx-auto"></div>
     </div>
   );
 };
 
 export default Login;
+
 
