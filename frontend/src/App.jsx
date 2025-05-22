@@ -1,8 +1,10 @@
 import React, { useEffect, useContext } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
-import Dashboard from './components/EmailForm';
+import EmailForm from './components/EmailForm';
 import { AuthContext } from './AuthContext'; // Make sure this path is correct
+const loginEndPoint = process.env.REACT_APP_LOGIN_ENDPOINT;
+const emailFormEndPoint = process.env.REACT_APP_EMAILFORM_ENDPOINT;
 
 const App = () => {
   const { user, setUser } = useContext(AuthContext);
@@ -18,15 +20,15 @@ const App = () => {
     <Routes>
       <Route 
         path="/" 
-        element={<Navigate to="/login" />} 
+        element={<Navigate to={loginEndPoint} />} 
       />
       <Route
-        path="/login"
-        element={!user ? <Login setUser={setUser} /> : <Navigate to="/dashboard" />}
+        path={loginEndPoint}
+        element={!user ? <Login setUser={setUser} /> : <Navigate to={emailFormEndPoint} />}
       />
       <Route
-        path="/dashboard"
-        element={user ? <Dashboard user={user} setUser={setUser} /> : <Navigate to="/" />}
+        path={emailFormEndPoint}
+        element={user ? <EmailForm user={user} setUser={setUser} /> : <Navigate to="/" />}
       />
     </Routes>
   );

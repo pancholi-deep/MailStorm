@@ -2,6 +2,9 @@ import React, { useEffect, useState, useRef, useContext } from "react";
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../AuthContext'; // Adjust the path if needed
 
+const apiBaseUrl = process.env.REACT_APP_API_BASE_URL;
+const loginEndPoint = process.env.REACT_APP_LOGIN_ENDPOINT;
+
 export default function EmailForm() {
   const navigate = useNavigate();
   const { user, setUser, logout } = useContext(AuthContext);
@@ -26,7 +29,7 @@ export default function EmailForm() {
 
   const handleLogout = () => {
     logout(); 
-    navigate('/login');
+    navigate(loginEndPoint);
   };
 
   const personalEmailDomains = [
@@ -166,7 +169,7 @@ export default function EmailForm() {
     formData.append("template_file", templateFile);
 
     try {
-      const response = await fetch("http://localhost:8000/send-emails", {
+      const response = await fetch(apiBaseUrl, {
         method: "POST",
         body: formData,
         signal: abortControllerRef.current.signal, // pass abort signal here
@@ -249,12 +252,13 @@ export default function EmailForm() {
               {darkMode ? "🌙" : "☀️"}
             </button>
           </div>
-
-          <div className="p-8">
-            <h1 className="text-2xl font-bold">Welcome, {user?.name}</h1>
-            <p>Email: {user?.email}</p>
+          <div className="space-y-2">
+            <h1 className="text-lg font-bold">Welcome, {user?.name}</h1>
+            <h1 className="text-sm">Email: {user?.email}</h1>
             <button
-              className="mt-4 bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded"
+              className={`inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition
+                ${sending ? "bg-gray-400 cursor-not-allowed" : "bg-red-500 hover:bg-red-600"}
+                text-white py-2 px-4 rounded`}
               onClick={handleLogout}
             >
               Sign Out
@@ -265,6 +269,7 @@ export default function EmailForm() {
           <form onSubmit={handleSendEmails} className="space-y-5">
             {/* CSV Upload */}
             <div className="space-y-2">
+              <br/>
               <label htmlFor="csv-upload" className="block text-sm font-medium">
                 Upload CSV
               </label>
@@ -332,7 +337,7 @@ export default function EmailForm() {
                 disabled={sending}
                 className={`inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition
                   ${sending ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}
-                  text-white`}
+                  text-white py-2 px-4 rounded`}
               >
                 {sending ? "Sending..." : "Send Emails"}
               </button>

@@ -4,16 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from email_utils import send_email as send_email_sync
 from auth import router as auth_router
 import io, csv, os, asyncio
+from config import EMAIL_USER, EMAIL_PASS, REDIRECT_URL
 
-from dotenv import load_dotenv
-load_dotenv()
-
-EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-REDIRECT_URL = os.getenv("REDIRECT_URL")
-
-if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
-    raise RuntimeError("EMAIL_ADDRESS or EMAIL_PASSWORD environment variable not set.")
+if not EMAIL_USER or not EMAIL_PASS:
+    raise RuntimeError("EMAIL_USER or EMAIL_PASS environment variable not set.")
 
 app = FastAPI()
 app.add_middleware(
@@ -24,12 +18,12 @@ app.add_middleware(
 )
 app.include_router(auth_router)
 
-async def send_email(name, recipient_email, subject, body, email_address, email_password):
+async def send_email(name, recipient_email, subject, body, EMAIL_USER, EMAIL_PASS):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(
         None,
         send_email_sync,
-        name, recipient_email, subject, body, email_address, email_password
+        name, recipient_email, subject, body, EMAIL_USER, EMAIL_PASS
     )
 
 def load_email_template_from_string(template_str: str, name: str):
@@ -72,7 +66,7 @@ async def send_emails(csv_file: UploadFile = File(...), template_file: UploadFil
                 name = name_raw.split()[0]
 
                 subject, body = load_email_template_from_string(template_content, name)
-                await send_email(name, recipient_email, subject, body, EMAIL_ADDRESS, EMAIL_PASSWORD)
+                await send_email(name, recipient_email, subject, body, EMAIL_USER, EMAIL_PASS)
 
                 success += 1
                 msg = f"{row_no}. Success: Name: {name}, Email: {recipient_email}"

@@ -2,9 +2,12 @@ import React, { useEffect, useRef } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { useNavigate } from 'react-router-dom';
 
+const emailFormEndPoint = process.env.REACT_APP_EMAILFORM_ENDPOINT;
+
 const Login = ({ setUser }) => {
   const navigate = useNavigate();
   const didInit = useRef(false);
+  const googleAuthClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
 
   useEffect(() => {
     if (didInit.current) return;
@@ -15,7 +18,7 @@ const Login = ({ setUser }) => {
         const userObject = jwtDecode(response.credential);
         localStorage.setItem('user', JSON.stringify(userObject));
         setUser(userObject);
-        navigate('/dashboard');
+        navigate(emailFormEndPoint);
       } catch (error) {
         console.error('Failed to decode token or set user', error);
       }
@@ -23,7 +26,7 @@ const Login = ({ setUser }) => {
 
     if (window.google && window.google.accounts && window.google.accounts.id) {
       window.google.accounts.id.initialize({
-        client_id: '465815423693-uslgljs5n441mg70odibtdk5avtm3gbe.apps.googleusercontent.com',
+        client_id: googleAuthClientId,
         callback: handleCredentialResponse,
       });
 
@@ -34,7 +37,7 @@ const Login = ({ setUser }) => {
     } else {
       console.warn('Google API not loaded yet.');
     }
-  }, [setUser, navigate]);
+  }, [setUser, navigate, googleAuthClientId]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900 px-4">
