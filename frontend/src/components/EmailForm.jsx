@@ -2,8 +2,9 @@ import React, { useEffect, useState, useRef, useContext } from "react";
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../AuthContext'; // Adjust the path if needed
 
-const apiBaseUrl = process.env.REACT_APP_API_BASE_URL;
+const backendURL = process.env.REACT_APP_BACKEND_URL;
 const loginEndPoint = process.env.REACT_APP_LOGIN_ENDPOINT;
+const sendEmailsEndPoint = process.env.REACT_APP_SENDEMAIL_ENDPOINT;
 
 export default function EmailForm() {
   const navigate = useNavigate();
@@ -170,7 +171,7 @@ export default function EmailForm() {
     formData.append("template_file", templateFile);
 
     try {
-      const response = await fetch(apiBaseUrl, {
+      const response = await fetch(`${backendURL}${sendEmailsEndPoint}`, {
         method: "POST",
         body: formData,
         signal: abortControllerRef.current.signal, // pass abort signal here

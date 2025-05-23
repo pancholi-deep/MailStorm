@@ -1,29 +1,58 @@
-# auth.py
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
-from google.oauth2 import id_token
-from google.auth.transport import requests as grequests
-
-class TokenPayload(BaseModel):
-    token: str
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
+from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI
+import requests
 
 router = APIRouter()
 
-@router.post("/auth/google")
-def verify_google_token(payload: TokenPayload):
-    try:
-        # Validate the token and decode user info
-        id_info = id_token.verify_oauth2_token(payload.token, grequests.Request())
-        email = id_info.get("email")
-        name = id_info.get("name")
-        picture = id_info.get("picture")
+class CodeExchangeRequest(BaseModel):
+    code: str
 
-        # Optionally: Save user to DB or allow list
+@router.post("/auth/google")
+async def auth_google(payload: CodeExchangeRequest):
+    try:
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": GOOGLE_CLIENT_ID,
+                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [REDIRECT_URI],
+                }
+            },
+            scopes=[
+                "https://www.googleapis.com/auth/gmail.send",
+                "openid",
+                "https://www.googleapis.com/auth/userinfo.profile",
+                "https://www.googleapis.com/auth/userinfo.email",
+            ],
+        )
+        if flow.redirect_uri != "postmessage":
+            flow.redirect_uri = "postmessage"
+
+        # Exchange the code for credentials
+        flow.fetch_token(code=payload.code)
+        credentials = flow.credentials
+
+        userinfo_response = requests.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {credentials.token}"}
+        )
+        userinfo = userinfo_response.json()
+        name = userinfo.get("given_name") if userinfo.get("given_name") else userinfo.get("name")
+        email = userinfo.get("email")
+
         return {
-            "email": email,
-            "name": name,
-            "picture": picture,
-            "token": payload.token  # Echoing token back for simplicity
+            "user": {
+                "name": name,
+                "email": email
+            },
+            "access_token": credentials.token
         }
+
     except Exception as e:
-        raise HTTPException(status_code=401, detail="Invalid Google token")
+        raise HTTPException(status_code=400, detail=f"Authentication failed: {str(e)}")

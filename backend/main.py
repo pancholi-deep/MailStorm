@@ -12,7 +12,8 @@ if not EMAIL_USER or not EMAIL_PASS:
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[REDIRECT_URL],  # your React app URL
+    allow_origins=[REDIRECT_URL], # your React app URL
+    allow_credentials=True,   
     allow_methods=["*"],
     allow_headers=["*"],
 )

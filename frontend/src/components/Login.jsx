@@ -1,50 +1,49 @@
-import React, { useEffect, useRef } from 'react';
-import { jwtDecode } from 'jwt-decode';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const emailFormEndPoint = process.env.REACT_APP_EMAILFORM_ENDPOINT;
+const googleAuthClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
 
 const Login = ({ setUser }) => {
   const navigate = useNavigate();
-  const didInit = useRef(false);
-  const googleAuthClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
 
   useEffect(() => {
-    if (didInit.current) return;
-    didInit.current = true;
-
-    const handleCredentialResponse = (response) => {
-      try {
-        const userObject = jwtDecode(response.credential);
-        localStorage.setItem('user', JSON.stringify(userObject));
-        setUser(userObject);
-        navigate(emailFormEndPoint);
-      } catch (error) {
-        console.error('Failed to decode token or set user', error);
-      }
-    };
-
-    if (window.google && window.google.accounts && window.google.accounts.id) {
-      window.google.accounts.id.initialize({
-        client_id: googleAuthClientId,
-        callback: handleCredentialResponse,
-      });
-
-      window.google.accounts.id.renderButton(
-        document.getElementById('google-signin-button'),
-        {
-          theme: 'outline',
-          size: 'large',
-          shape: 'pill',
-          logo_alignment: 'center',
-          width: 300,
-          type: 'standard'
-        }
-      );
-    } else {
-      console.warn('Google API not loaded yet.');
+    if (!window.google) {
+      console.warn('Google API not loaded');
+      return;
     }
-  }, [setUser, navigate, googleAuthClientId]);
+
+    const codeClient = window.google.accounts.oauth2.initCodeClient({
+      client_id: googleAuthClientId,
+      scope: 'https://www.googleapis.com/auth/gmail.send openid https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+      ux_mode: 'popup',
+      callback: async (response) => {
+        try {
+          const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/auth/google`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: response.code }),
+            credentials: 'include',
+          });
+
+          if (!res.ok) throw new Error('Backend auth failed');
+
+          const data = await res.json();
+          localStorage.setItem('user', JSON.stringify(data.user));
+          setUser(data.user);
+          navigate(emailFormEndPoint);
+        } catch (err) {
+          console.error('Login failed', err);
+        }
+      },
+    });
+
+    const loginBtn = document.getElementById('google-login-btn');
+    if (loginBtn) {
+      loginBtn.onclick = () => codeClient.requestCode();
+    }
+
+  }, [navigate, setUser]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900 px-4">
@@ -54,11 +53,11 @@ const Login = ({ setUser }) => {
           <span className="ml-3 text-gray-600 dark:text-gray-400 text-xl font-light">Mass Mailer</span>
         </h1>
       </header>
-      <div id="google-signin-button" className="mx-auto"></div>
+      <button id="google-login-btn" className="px-6 py-3 rounded-full bg-blue-600 text-white hover:bg-blue-700">
+        Login with Google
+      </button>
     </div>
   );
 };
 
 export default Login;
-
-

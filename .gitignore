@@ -12,6 +12,6 @@ build/
 *.log
 .DS_Store
 
-client_secret_465815423693-uslgljs5n441mg70odibtdk5avtm3gbe.apps.googleusercontent.com.json   
+client_secret.json
 
 __pycache__/
