@@ -30,6 +30,7 @@ const Login = ({ setUser }) => {
 
           const data = await res.json();
           localStorage.setItem('user', JSON.stringify(data.user));
+          localStorage.setItem('access_token', data.access_token);
           setUser(data.user);
           navigate(emailFormEndPoint);
         } catch (err) {

@@ -1,4 +1,5 @@
-import smtplib, base64, httpx
+import json
+import smtplib, base64, httpx, requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from config import EMAIL_HOST, EMAIL_PORT
@@ -43,3 +44,17 @@ async def get_user_email_from_token(token: str) -> str:
         print(f"Token verification failed: {e}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
+def create_message(sender: str, to: str, subject: str, body: str) -> dict:
+    message = f"From: {sender}\r\nTo: {to}\r\nSubject: {subject}\r\n\r\n{body}"
+    encoded_message = base64.urlsafe_b64encode(message.encode("utf-8")).decode("utf-8")
+    return {"raw": encoded_message}
+
+def send_via_gmail_api(access_token: str, to: str, subject: str, body: str, sender_email: str):
+    url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+    message = create_message(sender_email, to, subject, body)
+    response = requests.post(url, headers=headers, data=json.dumps(message))
+    response.raise_for_status()

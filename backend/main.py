@@ -1,9 +1,11 @@
-from fastapi import FastAPI, UploadFile, File
+from http.client import HTTPException
+from fastapi import FastAPI, UploadFile, File, Request, Header
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from email_utils import send_email as send_email_sync
+from utils import send_email as send_email_sync
+from utils import send_via_gmail_api
 from auth import router as auth_router
-import io, csv, os, asyncio
+import io, csv, asyncio
 from config import EMAIL_USER, EMAIL_PASS, REDIRECT_URL
 
 if not EMAIL_USER or not EMAIL_PASS:
@@ -36,7 +38,15 @@ def load_email_template_from_string(template_str: str, name: str):
     return subject_line.format(name=name), body_text.format(name=name)
 
 @app.post("/send-emails")
-async def send_emails(csv_file: UploadFile = File(...), template_file: UploadFile = File(...)):
+async def send_emails(
+    request: Request,
+    csv_file: UploadFile = File(...),
+    template_file: UploadFile = File(...),
+    authorization: str = Header(None),
+):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    access_token = authorization.removeprefix("Bearer ").strip()
     # Read files fully here (before generator)
     try:
         template_bytes = await template_file.read()
@@ -67,7 +77,7 @@ async def send_emails(csv_file: UploadFile = File(...), template_file: UploadFil
                 name = name_raw.split()[0]
 
                 subject, body = load_email_template_from_string(template_content, name)
-                await send_email(name, recipient_email, subject, body, EMAIL_USER, EMAIL_PASS)
+                send_via_gmail_api(access_token, recipient_email, subject, body, sender_email="me")
 
                 success += 1
                 msg = f"{row_no}. Success: Name: {name}, Email: {recipient_email}"
