@@ -18,6 +18,7 @@ export default function EmailForm() {
   // File states
   const [csvFile, setCsvFile] = useState(null);
   const [templateFile, setTemplateFile] = useState(null);
+  const [isHtml, setisHtml] = useState(null);
 
   // Validation errors
   const [csvError, setCsvError] = useState("");
@@ -66,8 +67,8 @@ export default function EmailForm() {
       setCsvError("");
       setCsvFile(file);
     } else if (type === "template") {
-      if (!file.name.endsWith(".txt")) {
-        setTemplateError("Please upload a valid TXT file.");
+      if (!file.name.endsWith(".txt") && !file.name.endsWith(".html")) {
+        setTemplateError("Please upload a valid TXT or HTML file.");
         setTemplateFile(null);
         return;
       }
@@ -85,6 +86,43 @@ export default function EmailForm() {
 
   // Validate and process files only after user clicks the button
   const handleProcessFiles = async () => {
+    const isHtml = templateFile.name.endsWith(".html");
+    const content = await readFileAsText(templateFile);
+
+    if (isHtml) {
+      setEmailSubject(""); // optionally extract from <title> or leave empty
+      setEmailBody(content);
+      setisHtml(isHtml);
+    } else {
+      const lines = content.trim().split("\n");
+    
+      let subject = "";
+      let bodyLines = [];
+    
+      const subjectLineIndex = lines.findIndex((line) =>
+        line.toLowerCase().startsWith("subject:")
+      );
+      const bodyLineIndex = lines.findIndex((line) =>
+        line.toLowerCase().startsWith("body:")
+      );
+    
+      if (subjectLineIndex !== -1) {
+        subject = lines[subjectLineIndex].substring(8).trim();
+      }
+    
+      if (bodyLineIndex !== -1) {
+        bodyLines = lines.slice(bodyLineIndex + 1);
+      } else if (subjectLineIndex !== -1) {
+        bodyLines = lines.slice(subjectLineIndex + 1);
+      } else {
+        bodyLines = lines;
+      }
+    
+      const body = bodyLines.join("\n").trim();
+      setEmailSubject(subject);
+      setEmailBody(body);
+    }
+
     setCsvError("");
     setTemplateError("");
 
@@ -100,43 +138,64 @@ export default function EmailForm() {
     try {
       // Validate CSV content
       await validateCSVContent(csvFile, readFileAsText);
-
+    
       // Read template content as text
       const content = await readFileAsText(templateFile);
-
+    
       // Validate template content
       await validateTemplateContent(templateFile, () => content);
-
-      // Parse Subject and Body from template content
-      const lines = content.trim().split("\n");
-
+    
+      // Try to extract subject from HTML comment first
+      const subjectMatch = content.match(/<!--\s*Subject:\s*(.*?)\s*-->/i);
+    
       let subject = "";
       let bodyLines = [];
-
-      const subjectLineIndex = lines.findIndex((line) =>
-        line.toLowerCase().startsWith("subject:")
-      );
-      const bodyLineIndex = lines.findIndex((line) =>
-        line.toLowerCase().startsWith("body:")
-      );
-
-      if (subjectLineIndex !== -1) {
-        subject = lines[subjectLineIndex].substring(8).trim();
-      }
-
-      if (bodyLineIndex !== -1) {
-        bodyLines = lines.slice(bodyLineIndex + 1);
-      } else if (subjectLineIndex !== -1) {
-        bodyLines = lines.slice(subjectLineIndex + 1);
-      } else {
+    
+      if (subjectMatch) {
+        // Subject found in HTML comment
+        subject = subjectMatch[1].trim();
+    
+        // Remove the subject comment line from body to avoid duplication
+        // Split by lines, filter out the subject comment line
+        const lines = content
+          .split("\n")
+          .filter(line => !line.match(/<!--\s*Subject:/i));
+    
         bodyLines = lines;
+      } else {
+        // No HTML comment subject found — fallback to parsing text lines
+    
+        // Split content by lines (trimmed)
+        const lines = content.trim().split("\n");
+    
+        // Find line starting with "subject:"
+        const subjectLineIndex = lines.findIndex(line =>
+          line.toLowerCase().startsWith("subject:")
+        );
+        // Find line starting with "body:"
+        const bodyLineIndex = lines.findIndex(line =>
+          line.toLowerCase().startsWith("body:")
+        );
+    
+        if (subjectLineIndex !== -1) {
+          subject = lines[subjectLineIndex].substring(8).trim();
+        }
+    
+        if (bodyLineIndex !== -1) {
+          bodyLines = lines.slice(bodyLineIndex + 1);
+        } else if (subjectLineIndex !== -1) {
+          bodyLines = lines.slice(subjectLineIndex + 1);
+        } else {
+          bodyLines = lines;
+        }
       }
-
+    
+      // Join body lines back into a single string
       const body = bodyLines.join("\n").trim();
-
+    
       setEmailSubject(subject);
       setEmailBody(body);
-
+    
       // Mark files as processed — show subject/body fields and hide uploaders
       setFilesProcessed(true);
     } catch (err) {
@@ -181,6 +240,7 @@ export default function EmailForm() {
     formData.append("csv_file", csvFile);
     formData.append("email_subject", emailSubject);
     formData.append("email_body", emailBody);
+    formData.append("isHtml", isHtml ? "true" : "false");
 
     try {
       const accessToken = localStorage.getItem("access_token");
@@ -352,7 +412,7 @@ export default function EmailForm() {
                   <input
                     id="template-upload"
                     type="file"
-                    accept=".txt"
+                    accept=".txt,.html"
                     className="hidden"
                     onChange={(e) => handleFileChange(e, "template")}
                     ref={templateInputRef}

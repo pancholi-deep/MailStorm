@@ -37,10 +37,16 @@ export async function validateCSVContent(file, readerFn = readFileAsText) {
 export async function validateTemplateContent(file, readerFn = readFileAsText) {
   const text = await readerFn(file);
   const lower = text.toLowerCase();
-  if (!lower.includes("subject:")) {
+
+  // Check if this looks like an HTML file by presence of <html> tag or <!DOCTYPE html>
+  const isHtml = lower.includes("<html>") || lower.includes("<!doctype html>");
+
+  if (!lower.includes("subject:") && !isHtml) {
     throw new Error("Template must contain a 'Subject:' line");
   }
-  if (!lower.includes("body:")) {
+
+  if (!lower.includes("body:") && !isHtml) {
     throw new Error("Template must contain a 'Body:' line");
   }
 }
+

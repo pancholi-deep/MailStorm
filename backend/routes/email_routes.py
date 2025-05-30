@@ -11,8 +11,10 @@ async def send_emails(
     csv_file: UploadFile = File(...),
     email_subject: str = Form(...),
     email_body: str = Form(...),
+    isHtml: str = Form(...),
     authorization: str = Header(None),
 ):
+    isHtml = isHtml.lower() == "true"
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     access_token = authorization.removeprefix("Bearer ").strip()
@@ -44,7 +46,17 @@ async def send_emails(
 
                 personalized_subject = email_subject.replace("{name}", name)
                 personalized_body = email_body.replace("{name}", name)
-                send_via_gmail_api(access_token, recipient_email, personalized_subject, personalized_body, sender_name, sender_email)
+
+                # Pass both text and html to the sending function
+                send_via_gmail_api(
+                    access_token,
+                    recipient_email,
+                    personalized_subject,
+                    personalized_body,
+                    sender_name,
+                    sender_email,
+                    isHtml,
+                )
 
                 success += 1
                 msg = f"{row_no}. Success: Name: {name}, Email: {recipient_email}"
