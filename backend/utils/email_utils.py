@@ -2,14 +2,6 @@ import base64, requests, json
 from email.mime.text import MIMEText
 from core.config import GMAIL_SEND_EMAIL
 
-def load_email_template(template_str: str, name: str):
-    try:
-        subject_line = template_str.split("Body:")[0].replace("Subject:", "").strip()
-        body_text = template_str.split("Body:")[1].strip()
-    except (IndexError, AttributeError):
-        raise ValueError("Template format error: Ensure it has 'Subject:' and 'Body:' sections.")
-    return subject_line.format(name=name), body_text.format(name=name)
-
 def create_message(sender_name, sender_email, to, subject, body):
     from_header = f"{sender_name} <{sender_email}>"
 

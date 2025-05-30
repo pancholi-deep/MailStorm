@@ -1,7 +1,7 @@
-from fastapi import APIRouter, UploadFile, File, Header, HTTPException
+from fastapi import APIRouter, UploadFile, File, Header, HTTPException, Form
 from fastapi.responses import StreamingResponse
 import io, csv, asyncio
-from utils.email_utils import load_email_template, send_via_gmail_api
+from utils.email_utils import send_via_gmail_api
 from utils.auth_utils import get_user_info
 
 router = APIRouter()
@@ -9,7 +9,8 @@ router = APIRouter()
 @router.post("/send-emails")
 async def send_emails(
     csv_file: UploadFile = File(...),
-    template_file: UploadFile = File(...),
+    email_subject: str = Form(...),
+    email_body: str = Form(...),
     authorization: str = Header(None),
 ):
     if not authorization or not authorization.startswith("Bearer "):
@@ -19,13 +20,10 @@ async def send_emails(
     sender_name = user_info.get("name")
     sender_email = user_info.get("email")
     try:
-        template_bytes = await template_file.read()
         csv_bytes = await csv_file.read()
     finally:
-        await template_file.close()
         await csv_file.close()
 
-    template_content = template_bytes.decode("utf-8")
     csv_data = csv_bytes.decode("utf-8")
 
     async def event_generator():
@@ -44,8 +42,9 @@ async def send_emails(
 
                 name = name_raw.split()[0]
 
-                subject, body = load_email_template(template_content, name)
-                send_via_gmail_api(access_token, recipient_email, subject, body, sender_name, sender_email)
+                personalized_subject = email_subject.replace("{name}", name)
+                personalized_body = email_body.replace("{name}", name)
+                send_via_gmail_api(access_token, recipient_email, personalized_subject, personalized_body, sender_name, sender_email)
 
                 success += 1
                 msg = f"{row_no}. Success: Name: {name}, Email: {recipient_email}"

@@ -14,14 +14,31 @@ const sendEmailsEndPoint = process.env.REACT_APP_SENDEMAIL_ENDPOINT;
 export default function EmailForm() {
   const navigate = useNavigate();
   const { user, setUser, logout } = useContext(AuthContext);
+
+  // File states
   const [csvFile, setCsvFile] = useState(null);
   const [templateFile, setTemplateFile] = useState(null);
+
+  // Validation errors
   const [csvError, setCsvError] = useState("");
   const [templateError, setTemplateError] = useState("");
+
+  // Email content states
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+
+  // Control flow state
+  const [filesProcessed, setFilesProcessed] = useState(false);
+
+  // Sending and logs
   const [logs, setLogs] = useState([]);
   const [sending, setSending] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
   const abortControllerRef = useRef(null);
+  const csvInputRef = useRef(null);
+  const templateInputRef = useRef(null);
+
+  // UI theme
+  const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -35,7 +52,8 @@ export default function EmailForm() {
     navigate(loginEndPoint);
   };
 
-  const handleFileChange = async (e, type) => {
+  // When user selects files (just set them, do not parse or validate yet)
+  const handleFileChange = (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -45,37 +63,106 @@ export default function EmailForm() {
         setCsvFile(null);
         return;
       }
-      try {
-        await validateCSVContent(file, readFileAsText);
-        setCsvFile(file);
-        setCsvError("");
-      } catch (err) {
-        setCsvError(err.message);
-        setCsvFile(null);
-      }
-    }
-
-    if (type === "template") {
+      setCsvError("");
+      setCsvFile(file);
+    } else if (type === "template") {
       if (!file.name.endsWith(".txt")) {
         setTemplateError("Please upload a valid TXT file.");
         setTemplateFile(null);
         return;
       }
-      try {
-        await validateTemplateContent(file, readFileAsText);
-        setTemplateFile(file);
-        setTemplateError("");
-      } catch (err) {
-        setTemplateError(err.message);
-        setTemplateFile(null);
-      }
+      setTemplateError("");
+      setTemplateFile(file);
     }
   };
 
+  // Handle drag and drop for files
   const handleFileDrop = (e, type) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     handleFileChange({ target: { files: [file] } }, type);
+  };
+
+  // Validate and process files only after user clicks the button
+  const handleProcessFiles = async () => {
+    setCsvError("");
+    setTemplateError("");
+
+    if (!csvFile) {
+      setCsvError("Please upload a CSV file.");
+      return;
+    }
+    if (!templateFile) {
+      setTemplateError("Please upload a Template TXT file.");
+      return;
+    }
+
+    try {
+      // Validate CSV content
+      await validateCSVContent(csvFile, readFileAsText);
+
+      // Read template content as text
+      const content = await readFileAsText(templateFile);
+
+      // Validate template content
+      await validateTemplateContent(templateFile, () => content);
+
+      // Parse Subject and Body from template content
+      const lines = content.trim().split("\n");
+
+      let subject = "";
+      let bodyLines = [];
+
+      const subjectLineIndex = lines.findIndex((line) =>
+        line.toLowerCase().startsWith("subject:")
+      );
+      const bodyLineIndex = lines.findIndex((line) =>
+        line.toLowerCase().startsWith("body:")
+      );
+
+      if (subjectLineIndex !== -1) {
+        subject = lines[subjectLineIndex].substring(8).trim();
+      }
+
+      if (bodyLineIndex !== -1) {
+        bodyLines = lines.slice(bodyLineIndex + 1);
+      } else if (subjectLineIndex !== -1) {
+        bodyLines = lines.slice(subjectLineIndex + 1);
+      } else {
+        bodyLines = lines;
+      }
+
+      const body = bodyLines.join("\n").trim();
+
+      setEmailSubject(subject);
+      setEmailBody(body);
+
+      // Mark files as processed — show subject/body fields and hide uploaders
+      setFilesProcessed(true);
+    } catch (err) {
+      // If error is from CSV validation
+      if (err.message.includes("CSV")) {
+        setCsvError(err.message);
+      } else {
+        setTemplateError(err.message);
+      }
+    }
+  };
+
+  // Reset all to upload files again
+  const handleReset = () => {
+    setCsvFile(null);
+    setTemplateFile(null);
+    setCsvError("");
+    setTemplateError("");
+    setEmailSubject("");
+    setEmailBody("");
+    setFilesProcessed(false);
+    setLogs([]);
+
+    // Clear file input values so user can upload the same file again
+    if (csvInputRef.current) csvInputRef.current.value = "";
+    if (templateInputRef.current) templateInputRef.current.value = "";
   };
 
   const handleSendEmails = async (e) => {
@@ -92,7 +179,8 @@ export default function EmailForm() {
     const formData = new FormData();
     formData.append("email", user.email);
     formData.append("csv_file", csvFile);
-    formData.append("template_file", templateFile);
+    formData.append("email_subject", emailSubject);
+    formData.append("email_body", emailBody);
 
     try {
       const accessToken = localStorage.getItem("access_token");
@@ -180,12 +268,11 @@ export default function EmailForm() {
               {darkMode ? "🌙" : "☀️"}
             </button>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 mb-6">
             <h1 className="text-lg font-bold">Welcome, {user?.name}</h1>
             <h1 className="text-sm">Email: {user?.email}</h1>
             <button
-              className={`inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition
-                ${sending ? "bg-gray-400 cursor-not-allowed" : "bg-red-500 hover:bg-red-600"}
+              className={`inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition bg-red-500 hover:bg-red-600
                 text-white py-2 px-4 rounded`}
               onClick={handleLogout}
             >
@@ -193,94 +280,183 @@ export default function EmailForm() {
             </button>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSendEmails} className="space-y-5">
-            {/* CSV Upload */}
-            <div className="space-y-2">
-              <br/>
-              <label htmlFor="csv-upload" className="block text-sm font-medium">
-                Upload CSV
-              </label>
-              <label
-                htmlFor="csv-upload"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => handleFileDrop(e, "csv")}
-                className={`w-full flex flex-col items-center justify-center border-2 border-dashed rounded-md p-4 cursor-pointer transition-colors duration-200 text-sm
-                  ${csvError ? "border-red-500" : "border-gray-300 dark:border-gray-600"}
-                  bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700`}
-              >
-                <span className="text-xs text-gray-500 dark:text-gray-300">Drag & drop or click</span>
-                <span className="mt-1 font-medium">CSV File</span>
-              </label>
-              <input
-                id="csv-upload"
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={(e) => handleFileChange(e, "csv")}
-              />
-              {csvFile && (
-                <p className="text-xs text-green-600 dark:text-green-400">
-                  {csvFile.name} ({(csvFile.size / 1024).toFixed(2)} KB)
-                </p>
-              )}
-              {csvError && <p className="text-xs text-red-500">{csvError}</p>}
-            </div>
+          {/* Upload Files or Show Email Form */}
+          {!filesProcessed ? (
+            <>
+              <div className="flex space-x-6 mb-4">
+                {/* CSV Upload */}
+                <div className="flex-1 space-y-2">
+                  <label htmlFor="csv-upload" className="block text-sm font-medium">
+                    Upload CSV
+                  </label>
+                  <label
+                    htmlFor="csv-upload"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => handleFileDrop(e, "csv")}
+                    className={`w-full flex flex-col items-center justify-center border-2 border-dashed rounded-md p-4 cursor-pointer transition-colors duration-200 text-sm
+                    ${csvError ? "border-red-500" : "border-gray-300 dark:border-gray-600"}
+                    bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700`}
+                  >
+                    {csvFile ? (
+                      <div className="text-center">
+                        <p className="text-xs text-green-600 dark:text-green-400">
+                          {csvFile.name} ({(csvFile.size / 1024).toFixed(2)} KB)
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="text-xs text-gray-500 dark:text-gray-300">
+                          Drag & drop or click
+                        </span>
+                      </>
+                    )}
+                  </label>
+                  <input
+                    id="csv-upload"
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    onChange={(e) => handleFileChange(e, "csv")}
+                    ref={csvInputRef}
+                  />
+                  {csvError && <p className="text-xs text-red-500">{csvError}</p>}
+                </div>
 
-            {/* Template Upload */}
-            <div className="space-y-2">
-              <label htmlFor="template-upload" className="block text-sm font-medium">
-                Upload Template
-              </label>
-              <label
-                htmlFor="template-upload"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => handleFileDrop(e, "template")}
-                className={`w-full flex flex-col items-center justify-center border-2 border-dashed rounded-md p-4 cursor-pointer transition-colors duration-200 text-sm
-                  ${templateError ? "border-red-500" : "border-gray-300 dark:border-gray-600"}
-                  bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700`}
-              >
-                <span className="text-xs text-gray-500 dark:text-gray-300">Drag & drop or click</span>
-                <span className="mt-1 font-medium">TXT File</span>
-              </label>
-              <input
-                id="template-upload"
-                type="file"
-                accept=".txt"
-                className="hidden"
-                onChange={(e) => handleFileChange(e, "template")}
-              />
-              {templateFile && (
-                <p className="text-xs text-green-600 dark:text-green-400">
-                  {templateFile.name} ({(templateFile.size / 1024).toFixed(2)} KB)
-                </p>
-              )}
-              {templateError && <p className="text-xs text-red-500">{templateError}</p>}
-            </div>
+                {/* Template Upload */}
+                <div className="flex-1 space-y-2">
+                  <label htmlFor="template-upload" className="block text-sm font-medium">
+                    Upload Template
+                  </label>
+                  <label
+                    htmlFor="template-upload"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => handleFileDrop(e, "template")}
+                    className={`w-full flex flex-col items-center justify-center border-2 border-dashed rounded-md p-4 cursor-pointer transition-colors duration-200 text-sm
+                    ${templateError ? "border-red-500" : "border-gray-300 dark:border-gray-600"}
+                    bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700`}
+                  >
+                    {templateFile ? (
+                      <div className="text-center">
+                        <p className="text-xs text-green-600 dark:text-green-400">
+                          {templateFile.name} ({(templateFile.size / 1024).toFixed(2)} KB)
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="text-xs text-gray-500 dark:text-gray-300">
+                          Drag & drop or click
+                        </span>
+                      </>
+                    )}
+                  </label>
+                  <input
+                    id="template-upload"
+                    type="file"
+                    accept=".txt"
+                    className="hidden"
+                    onChange={(e) => handleFileChange(e, "template")}
+                    ref={templateInputRef}
+                  />
+                  {templateError && <p className="text-xs text-red-500">{templateError}</p>}
+                </div>
+              </div>
 
-            {/* Submit and Cancel Buttons */}
-            <div className="flex space-x-4">
-              <button
-                type="submit"
-                disabled={sending}
-                className={`inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition
-                  ${sending ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}
-                  text-white py-2 px-4 rounded`}
-              >
-                {sending ? "Sending..." : "Send Emails"}
-              </button>
-
-              {sending && (
+              <div className="flex space-x-2">
                 <button
-                  type="button"
-                  onClick={handleCancelSending}
-                  className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white transition"
+                  onClick={handleProcessFiles}
+                  className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white 
+                  bg-blue-600 hover:bg-blue-700 rounded-md transition"
+                  disabled={!csvFile || !templateFile}
                 >
-                  Cancel Sending
+                  Process Files
                 </button>
-              )}
-            </div>
-          </form>
+                {(csvFile || templateFile) && (
+                  <button
+                    onClick={handleReset}
+                    className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white 
+                    bg-gray-400 hover:bg-gray-500 rounded-md transition"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Email Subject and Body Editing */}
+              <form onSubmit={handleSendEmails} className="space-y-4 mb-6">
+                <div className="space-y-2">
+                  <label htmlFor="email-subject" className="block text-sm font-medium">
+                    Email Subject
+                  </label>
+                  <input
+                    id="email-subject"
+                    type="text"
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    placeholder="Enter email subject"
+                    className={`w-full border-2 border-dashed rounded-md p-4 text-sm transition-colors duration-200 
+                      border-gray-300 dark:border-gray-600 
+                      bg-white dark:bg-gray-800 
+                      hover:bg-gray-50 dark:hover:bg-gray-700 
+                      text-gray-800 dark:text-white`}
+                    required
+                  />
+              </div>
+
+              {/* Email Body */}
+              <div className="space-y-2">
+                <label htmlFor="email-body" className="block text-sm font-medium">
+                  Email Body
+                </label>
+                <textarea
+                  id="email-body"
+                  value={emailBody}
+                  onChange={(e) => setEmailBody(e.target.value)}
+                  rows={8}
+                  placeholder="Enter email body"
+                  className={`w-full border-2 border-dashed rounded-md p-4 text-sm transition-colors duration-200 
+                    border-gray-300 dark:border-gray-600 
+                    bg-white dark:bg-gray-800 
+                    hover:bg-gray-50 dark:hover:bg-gray-700 
+                    text-gray-800 dark:text-white`}
+                  required
+                />
+              </div>
+
+                <div className="flex space-x-4">
+                  <button
+                    type="submit"
+                    disabled={sending}
+                    className={`inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white
+                    bg-gray-400 hover:bg-gray-500 rounded-md transition
+                    ${sending ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}`}
+                  >
+                    {sending ? "Sending..." : "Send Emails"}
+                  </button>
+
+                  {sending && (
+                    <button
+                      type="button"
+                      onClick={handleCancelSending}
+                      className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      Cancel
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    disabled={sending}
+                    className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md bg-gray-400 hover:bg-gray-500 text-white"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </form>
+            </>
+          )}
 
           {/* Logs Section */}
           <div className="mt-8 bg-gray-50 dark:bg-gray-900 rounded-md p-4 max-h-64 overflow-auto">
