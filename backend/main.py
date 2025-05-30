@@ -1,107 +1,18 @@
-from http.client import HTTPException
-from fastapi import FastAPI, UploadFile, File, Request, Header
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from utils import send_email as send_email_sync
-from utils import send_via_gmail_api
-from auth import router as auth_router
-import io, csv, asyncio
-from config import EMAIL_USER, EMAIL_PASS, REDIRECT_URL
-
-if not EMAIL_USER or not EMAIL_PASS:
-    raise RuntimeError("EMAIL_USER or EMAIL_PASS environment variable not set.")
+from routes.auth_routes import router as auth_router
+from routes.email_routes import router as email_router
+from core.config import REDIRECT_URL
 
 app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[REDIRECT_URL], # your React app URL
-    allow_credentials=True,   
+    allow_origins=[REDIRECT_URL], 
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 app.include_router(auth_router)
-
-async def send_email(name, recipient_email, subject, body, EMAIL_USER, EMAIL_PASS):
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(
-        None,
-        send_email_sync,
-        name, recipient_email, subject, body, EMAIL_USER, EMAIL_PASS
-    )
-
-def load_email_template_from_string(template_str: str, name: str):
-    try:
-        subject_line = template_str.split("Body:")[0].replace("Subject:", "").strip()
-        body_text = template_str.split("Body:")[1].strip()
-    except (IndexError, AttributeError):
-        raise ValueError("Template format error: Ensure it has 'Subject:' and 'Body:' sections.")
-    return subject_line.format(name=name), body_text.format(name=name)
-
-@app.post("/send-emails")
-async def send_emails(
-    request: Request,
-    csv_file: UploadFile = File(...),
-    template_file: UploadFile = File(...),
-    authorization: str = Header(None),
-):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    access_token = authorization.removeprefix("Bearer ").strip()
-    # Read files fully here (before generator)
-    try:
-        template_bytes = await template_file.read()
-        csv_bytes = await csv_file.read()
-    finally:
-        # Close files ASAP
-        await template_file.close()
-        await csv_file.close()
-
-    template_content = template_bytes.decode("utf-8")
-    csv_data = csv_bytes.decode("utf-8")
-
-    async def event_generator():
-        csv_io = io.StringIO(csv_data)
-        reader = csv.DictReader(csv_io)
-
-        row_no, success, fail = 1, 0, 0
-
-        for row in reader:
-            try:
-                name_raw = row.get('name', '').strip()
-                recipient_email = row.get('email', '').strip()
-
-                if not name_raw or not recipient_email:
-                    missing_fields = [field for field, value in [('name', name_raw), ('email', recipient_email)] if not value]
-                    raise ValueError(f"Missing field(s): {', '.join(missing_fields)}")
-
-                name = name_raw.split()[0]
-
-                subject, body = load_email_template_from_string(template_content, name)
-                send_via_gmail_api(access_token, recipient_email, subject, body, sender_email="me")
-
-                success += 1
-                msg = f"{row_no}. Success: Name: {name}, Email: {recipient_email}"
-
-            except Exception as err:
-                fail += 1
-                msg = f"{row_no}. Failed: {err}"
-
-            finally:
-                row_no += 1
-
-            try:
-                yield f"data: {msg}\n\n"
-            except (RuntimeError, asyncio.CancelledError):
-                break
-
-            await asyncio.sleep(0)
-
-        try:
-            if success>0:
-                yield f"data: \nFinished sending emails. \nSuccess: {success}, Failures: {fail}\n\n"
-            else:
-                yield f"data: \nFailed to send all {fail} emails.\n\n"
-        except (RuntimeError, asyncio.CancelledError):
-            pass
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+app.include_router(email_router)
