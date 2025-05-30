@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import EmailForm from './components/EmailForm';
 import OAuthCallback from './components/OAuthCallback';
-import { AuthContext } from './AuthContext';
+import { AuthContext } from './context/authContext';
 
 const loginEndPoint = process.env.REACT_APP_LOGIN_ENDPOINT;
 const sendEmailsEndPoint = process.env.REACT_APP_SENDEMAIL_ENDPOINT;
