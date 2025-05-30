@@ -1,132 +1,136 @@
-📧 Email Sender App
+# 📧 Mass Email Sender
 
-A full-stack web application that allows users to:
-- Upload a CSV file with recipient details
-- Enter an email template using placeholders (e.g., {name}, {email})
-- Send personalized emails to each recipient using SMTP
+A full-stack web application that enables users to send personalized bulk emails effortlessly. Upload a CSV file containing recipient details, craft an email template with placeholders, and dispatch customized emails to each recipient via SMTP.
 
----
+## 🚀 Features
 
-Tech Stack
+* **CSV Upload**: Import recipient data seamlessly.
+* **Template-Based Emails**: Utilize placeholders like `{name}` and `{email}` for personalization.
+* **Bulk Email Dispatch**: Send individualized emails to multiple recipients in one go.
+* **SMTP Integration**: Secure and reliable email sending using SMTP protocols.
 
-- Frontend: React + Vite
-- Backend: FastAPI (Python)
-- Email Engine: SMTP via smtplib
-- File Handling: csv, email, starlette, pydantic
+## 🛠️ Tech Stack
 
----
+* **Frontend**: React with Vite
+* **Backend**: FastAPI (Python)
+* **Email Engine**: SMTP via `smtplib`
+* **File Handling**: `csv`, `email`, `starlette`, `pydantic`
 
-Project Structure
+## 📁 Project Structure
 
-.
-├── backend
-│   ├── main.py               FastAPI app entry point
-│   ├── models.py             Pydantic models for request/response schemas
-│   ├── utils.py              Email sending and CSV parsing utilities
-│   ├── requirements.txt      Python dependencies
-│   └── .env                  SMTP credentials (not committed)
-│
-├── frontend
-│   ├── public/               Static assets
-│   ├── src/
-│   │   ├── App.jsx           Main React component
-│   │   ├── components/       Upload and Email form components
-│   │   └── services/         API service for communicating with FastAPI
-│   └── vite.config.js        Vite configuration
-│
-├── .gitignore                Ignore .env and node_modules
-└── README.md                 Project documentation
+```
+mass-email-sender/
+├── backend/
+│   ├── main.py           # FastAPI application entry point
+│   ├── models.py         # Pydantic models for request/response schemas
+│   ├── utils.py          # Utilities for email sending and CSV parsing
+│   ├── requirements.txt  # Python dependencies
+│   └── .env              # SMTP credentials (excluded from version control)
+├── frontend/
+│   ├── public/           # Static assets
+│   └── src/
+│       ├── App.jsx       # Main React component
+│       ├── components/   # Upload and Email form components
+│       └── services/     # API service for backend communication
+├── .gitignore
+├── LICENSE
+└── README.md
+```
 
----
+## ⚙️ Setup Instructions
 
-How to Run Locally:
+### Prerequisites
 
- Prerequisites
+* **Node.js** (v14 or above)
+* **Python** (v3.8 or above)
+* **GMail Credentials**: Gmail Account
 
-  Python 3.8+
-  Node.js 18+ and npm
+### Backend Setup
 
----
+1. **Navigate to the backend directory**:
 
-1. Clone the Repository
+   ```bash
+   cd backend
+   ```
 
-git clone git@github.com:<your-username>/<repo-name>.git
-cd <repo-name>
+2. **Create a virtual environment**:
 
----
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
 
-2. Run the Backend (FastAPI)
+3. **Install dependencies**:
 
-cd backend
-python -m venv venv                  Create virtual environment
-source venv/bin/activate             Activate (use venv\Scripts\activate on Windows)
-pip install -r requirements.txt      Install dependencies
+   ```bash
+   pip install -r requirements.txt
+   ```
 
+4. **Configure environment variables**:
 
- Create a .env file in the backend/ directory with the following content:
+   * Create a `.env` file in the `backend/` directory with the following content:
 
-env
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-EMAIL_USER=your_email@gmail.com
-EMAIL_PASS=your_app_password
+     ```
+     SMTP_SERVER=smtp.example.com
+     SMTP_PORT=587
+     SMTP_USERNAME=your_email@example.com
+     SMTP_PASSWORD=your_email_password
+     ```
 
+5. **Run the FastAPI server**:
 
-For Gmail users, you must use an App Password if 2FA is enabled.
+   ```bash
+   uvicorn main:app --reload
+   ```
 
-Then, run the backend server:
+### Frontend Setup
 
-uvicorn main:app --reload
- Server will start at: http://localhost:8000
+1. **Navigate to the frontend directory**:
 
----
+   ```bash
+   cd frontend
+   ```
 
-3. Run the Frontend (React + Vite)
+2. **Install dependencies**:
 
-In a separate terminal:
+   ```bash
+   npm install
+   ```
 
-cd frontend
-npm install           Install React dependencies
-npm run dev           Start the frontend dev server
+3. **Start the development server**:
 
- Frontend will be served at: http://localhost:5173
+   ```bash
+   npm run dev
+   ```
 
----
+4. **Access the application**:
 
-4. Test the App
+   * Open your browser and navigate to `http://localhost:3000`
 
- 1. Visit http://localhost:5173
- 2. Upload a CSV file (sample below)
- 3. Upload an email template .txt like:
-   
-   Hi {name}, your registered email is {email}.
-   
+## 📄 Usage
 
- 4. Click Send Emails to trigger backend logic.
+1. **Upload CSV**:
 
----
+   * Click on the "Upload CSV" button and select your CSV file containing recipient details.
 
-Sample CSV Format
+2. **Upload Email Template**:
 
-csv
-name,email
-Alice,alice@example.com
-Bob,bob@example.com
+   * Upload a .txt/.html file with your email subject and body.
+   * Use placeholders like `{name}` and `{email}` to personalize the content.
 
-Placeholders in your email body should match the column headers in the CSV.
+3. **Send Emails**:
 
----
+   * Click on the "Send Emails" button to dispatch personalized emails to all recipients.
 
-Security Notes
+## 🧪 Testing
 
- Credentials are kept in .env and excluded via .gitignore
- Do not use your main email password
- Use Gmail App Passwords if you're using Gmail with 2FA
+* **Backend**:
 
----
+  * Utilize tools like `pytest` to write and run tests for your FastAPI endpoints.
+* **Frontend**:
 
-License
+  * Employ testing libraries such as `Jest` and `React Testing Library` for component testing.
 
-MIT License. Feel free to use, modify, and share!
+## 📄 License
 
----
+This project is licensed under the [MIT License](LICENSE).
