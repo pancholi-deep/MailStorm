@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
-from googleapiclient.discovery import build
-from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI
 import requests
+from core.config import (
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    REDIRECT_URI,
+    GOOGLE_AUTH_URL,
+    GOOGLE_TOKEN_URL,
+    GOOGLE_USER_INFO_URL,
+)
 
 router = APIRouter()
 
@@ -19,8 +24,8 @@ async def auth_google(payload: CodeExchangeRequest):
                 "web": {
                     "client_id": GOOGLE_CLIENT_ID,
                     "client_secret": GOOGLE_CLIENT_SECRET,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "auth_uri": GOOGLE_AUTH_URL,
+                    "token_uri": GOOGLE_TOKEN_URL,
                     "redirect_uris": [REDIRECT_URI],
                 }
             },
@@ -31,15 +36,15 @@ async def auth_google(payload: CodeExchangeRequest):
                 "https://www.googleapis.com/auth/userinfo.email",
             ],
         )
-        if flow.redirect_uri != "postmessage":
-            flow.redirect_uri = "postmessage"
+        if flow.redirect_uri != REDIRECT_URI:
+            flow.redirect_uri = REDIRECT_URI
 
         # Exchange the code for credentials
         flow.fetch_token(code=payload.code)
         credentials = flow.credentials
 
         userinfo_response = requests.get(
-            "https://www.googleapis.com/oauth2/v3/userinfo",
+            GOOGLE_USER_INFO_URL,
             headers={"Authorization": f"Bearer {credentials.token}"}
         )
         userinfo = userinfo_response.json()
@@ -56,3 +61,4 @@ async def auth_google(payload: CodeExchangeRequest):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Authentication failed: {str(e)}")
+    

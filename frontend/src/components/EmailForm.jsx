@@ -1,6 +1,11 @@
 import React, { useEffect, useState, useRef, useContext } from "react";
-import { useNavigate } from 'react-router-dom';
-import { AuthContext } from '../AuthContext'; // Adjust the path if needed
+import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../context/authContext";
+import {
+  validateCSVContent,
+  validateTemplateContent,
+} from "../utils/validationUtils";
+import { readFileAsText } from "../utils/fileUtils";
 
 const backendURL = process.env.REACT_APP_BACKEND_URL;
 const loginEndPoint = process.env.REACT_APP_LOGIN_ENDPOINT;
@@ -16,103 +21,18 @@ export default function EmailForm() {
   const [logs, setLogs] = useState([]);
   const [sending, setSending] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
-  const eventSourceRef = useRef(null);
-  const abortControllerRef = useRef(null); // Added for aborting fetch
+  const abortControllerRef = useRef(null);
 
   useEffect(() => {
     if (!user) {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
-      }
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) setUser(JSON.parse(storedUser));
     }
-  }, [user, setUser]);  
+  }, [user, setUser]);
 
   const handleLogout = () => {
-    logout(); 
+    logout();
     navigate(loginEndPoint);
-  };
-
-  const personalEmailDomains = [
-    "gmail.com",
-    "yahoo.com",
-    "outlook.com",
-    "hotmail.com",
-    "live.com",
-    "icloud.com",
-    "aol.com",
-    "mail.com",
-  ];
-
-  const validateEmail = (email) => {
-    email = email.toLowerCase();
-    return personalEmailDomains.some((domain) => email.endsWith("@" + domain));
-  };
-
-  // Utility to read text content from a file (returns Promise<string>)
-  const readFileAsText = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target.result);
-      reader.onerror = (e) => reject(e);
-      reader.readAsText(file);
-    });
-  };
-
-  const validateCSVContent = async (file) => {
-    try {
-      const text = await readFileAsText(file);
-      const lines = text.trim().split(/\r?\n/);
-      if (lines.length === 0) throw new Error("CSV file is empty");
-  
-      const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-      if (!headers.includes("name") || !headers.includes("email")) {
-        throw new Error("CSV must contain 'name' and 'email' columns");
-      }
-  
-      const nameIndex = headers.indexOf("name");
-      const emailIndex = headers.indexOf("email");
-  
-      // Validate emails in rows (skip header)
-      for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(",");
-        // Skip row if name or email is empty or missing
-        const name = cols[nameIndex]?.trim() || "";
-        const email = cols[emailIndex]?.trim() || "";
-        if (name === "" || email === "") {
-          // Skip this row silently
-          continue;
-        }
-        if (!validateEmail(email)) {
-          throw new Error(`Invalid personal email at row ${i + 1}: ${email}`);
-        }
-      }
-      setCsvError("");
-      return true;
-    } catch (error) {
-      setCsvError(error.message);
-      setCsvFile(null);
-      return false;
-    }
-  };  
-
-  const validateTemplateContent = async (file) => {
-    try {
-      const text = await readFileAsText(file);
-      const lowerText = text.toLowerCase();
-      if (!lowerText.includes("subject:")) {
-        throw new Error("Template must contain a 'Subject:' line");
-      }
-      if (!lowerText.includes("body:")) {
-        throw new Error("Template must contain a 'Body:' line");
-      }
-      setTemplateError("");
-      return true;
-    } catch (error) {
-      setTemplateError(error.message);
-      setTemplateFile(null);
-      return false;
-    }
   };
 
   const handleFileChange = async (e, type) => {
@@ -125,21 +45,29 @@ export default function EmailForm() {
         setCsvFile(null);
         return;
       }
-      // Validate CSV content
-      const valid = await validateCSVContent(file);
-      if (valid) {
+      try {
+        await validateCSVContent(file, readFileAsText);
         setCsvFile(file);
+        setCsvError("");
+      } catch (err) {
+        setCsvError(err.message);
+        setCsvFile(null);
       }
-    } else if (type === "template") {
+    }
+
+    if (type === "template") {
       if (!file.name.endsWith(".txt")) {
         setTemplateError("Please upload a valid TXT file.");
         setTemplateFile(null);
         return;
       }
-      // Validate template content
-      const valid = await validateTemplateContent(file);
-      if (valid) {
+      try {
+        await validateTemplateContent(file, readFileAsText);
         setTemplateFile(file);
+        setTemplateError("");
+      } catch (err) {
+        setTemplateError(err.message);
+        setTemplateFile(null);
       }
     }
   };
@@ -147,7 +75,6 @@ export default function EmailForm() {
   const handleFileDrop = (e, type) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    // create a synthetic event to reuse handleFileChange logic
     handleFileChange({ target: { files: [file] } }, type);
   };
 
@@ -160,9 +87,6 @@ export default function EmailForm() {
 
     setLogs([]);
     setSending(true);
-    if (eventSourceRef.current) eventSourceRef.current.close();
-
-    // Create a new AbortController instance for each request
     abortControllerRef.current = new AbortController();
 
     const formData = new FormData();
@@ -171,7 +95,7 @@ export default function EmailForm() {
     formData.append("template_file", templateFile);
 
     try {
-      const accessToken = localStorage.getItem('access_token');
+      const accessToken = localStorage.getItem("access_token");
       const response = await fetch(`${backendURL}${sendEmailsEndPoint}`, {
         method: "POST",
         body: formData,
@@ -183,8 +107,7 @@ export default function EmailForm() {
 
       if (!response.ok) {
         const errorText = await response.text();
-        setLogs((logs) => [...logs, `Error: ${errorText}`]);
-        setSending(false);
+        setLogs((prev) => [...prev, `Error: ${errorText}`]);
         return;
       }
 
@@ -197,7 +120,7 @@ export default function EmailForm() {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        let lines = buffer.split("\n\n");
+        const lines = buffer.split("\n\n");
         buffer = lines.pop();
 
         for (const line of lines) {
@@ -219,7 +142,6 @@ export default function EmailForm() {
     }
   };
 
-  // New handler to cancel sending
   const handleCancelSending = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
