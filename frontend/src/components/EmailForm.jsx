@@ -171,10 +171,14 @@ export default function EmailForm() {
     formData.append("template_file", templateFile);
 
     try {
+      const accessToken = localStorage.getItem('access_token');
       const response = await fetch(`${backendURL}${sendEmailsEndPoint}`, {
         method: "POST",
         body: formData,
-        signal: abortControllerRef.current.signal, // pass abort signal here
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok) {
