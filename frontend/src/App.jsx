@@ -3,9 +3,11 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import EmailForm from './components/EmailForm';
 import OAuthCallback from './components/OAuthCallback';
-import { AuthContext } from './AuthContext'; // Make sure this path is correct
+import { AuthContext } from './AuthContext';
+
 const loginEndPoint = process.env.REACT_APP_LOGIN_ENDPOINT;
 const sendEmailsEndPoint = process.env.REACT_APP_SENDEMAIL_ENDPOINT;
+const oAuthEndPoint = process.env.REACT_APP_OAUTH_ENDPOINT;
 
 const App = () => {
   const { user, setUser } = useContext(AuthContext);
@@ -20,7 +22,7 @@ const App = () => {
   return (
     <Routes>
       <Route 
-        path="/oauth/callback" 
+        path={oAuthEndPoint} 
         element={<OAuthCallback setUser={setUser} />} />
       <Route 
         path="/" 
