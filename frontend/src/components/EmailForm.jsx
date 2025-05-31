@@ -540,6 +540,16 @@ export default function EmailForm() {
             </button>
           )}
         </div>
+        <footer className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-sm text-gray-500">
+        <a
+          href="/privacy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:underline"
+        >
+          Privacy Policy
+        </a>
+      </footer>
       </div>
     </div>
   );

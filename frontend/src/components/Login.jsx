@@ -48,6 +48,16 @@ const Login = ({ setUser }) => {
         />
         Sign in with Google
       </button>
+      <footer className="absolute bottom-4 text-sm text-gray-500">
+        <a
+          href="/privacy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:underline"
+        >
+          Privacy Policy
+        </a>
+      </footer>
     </div>
   );
 };

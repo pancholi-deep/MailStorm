@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import EmailForm from './components/EmailForm';
 import OAuthCallback from './components/OAuthCallback';
+import PrivacyPolicy from './components/PrivacyPolicy';
 import { AuthContext } from './context/authContext';
 
 const loginEndPoint = process.env.REACT_APP_LOGIN_ENDPOINT;
@@ -35,6 +36,10 @@ const App = () => {
       <Route
         path={sendEmailsEndPoint}
         element={user ? <EmailForm user={user} setUser={setUser} /> : <Navigate to="/" />}
+      />
+      <Route 
+        path="/privacy" 
+        element={<PrivacyPolicy />} 
       />
     </Routes>
   );
