@@ -8,7 +8,7 @@ const PrivacyPolicy = () => {
 
       <p>
         MailStorm (referred to as “we”, “us”, or “our”) respects your privacy. This Privacy Policy describes how we
-        collect, use, and protect your information when you use our application.
+        collect, use, and protect your information when you use our application. 
       </p>
 
       <h2>Information We Collect</h2>
