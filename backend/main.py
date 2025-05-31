@@ -9,7 +9,6 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://mass-email-frontend.onrender.com"],
-    allow_origins=[REDIRECT_URL], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
