@@ -32,7 +32,7 @@ const Login = ({ setUser }) => {
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900 px-4">
       <header className="mb-12 text-center">
         <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white">
-          <span className="text-blue-600 dark:text-blue-400">EmailBlast</span>
+          <span className="text-blue-600 dark:text-blue-400">MailStorm</span>
           <span className="ml-3 text-gray-600 dark:text-gray-400 text-xl font-light">Mass Mailer</span>
         </h1>
       </header>

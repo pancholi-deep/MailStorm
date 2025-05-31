@@ -315,7 +315,7 @@ export default function EmailForm() {
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold tracking-tight">
-              <span className="text-blue-600 dark:text-blue-400">EmailBlast</span>
+              <span className="text-blue-600 dark:text-blue-400">MailStorm</span>
               <span className="ml-2 text-gray-600 dark:text-gray-300 text-base font-normal">
                 Mass Mailer
               </span>
