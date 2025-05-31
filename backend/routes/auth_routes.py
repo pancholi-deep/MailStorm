@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from google_auth_oauthlib.flow import Flow
 import requests
-from core.config import (
+from backend.core.config import (
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
     REDIRECT_URI,

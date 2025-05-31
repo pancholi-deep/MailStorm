@@ -1,5 +1,5 @@
 import requests, base64
-from core.config import GOOGLE_USER_INFO_URL
+from backend.core.config import GOOGLE_USER_INFO_URL
 
 def generate_oauth2_string(email, access_token):
     auth_string = f"user={email}\1auth=Bearer {access_token}\1\1"
