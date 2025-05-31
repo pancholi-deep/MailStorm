@@ -11,6 +11,7 @@ const PrivacyPolicy = () => {
         collect, use, and protect your information when you use our application. 
       </p>
 
+      <br/>
       <h2>Information We Collect</h2>
       <ul>
         <li>
@@ -23,18 +24,21 @@ const PrivacyPolicy = () => {
         </li>
       </ul>
 
+      <br/>
       <h2>How We Use Your Information</h2>
       <ul>
         <li>To send bulk emails on your behalf using the Gmail API.</li>
         <li>To identify and authenticate you via Google Sign-In.</li>
       </ul>
 
+      <br/>
       <h2>Data Security</h2>
       <p>
         We use industry-standard security practices. Access tokens are stored temporarily in memory during active
         sessions and are never stored persistently.
       </p>
 
+      <br/>
       <h2>Third-party Services</h2>
       <p>
         We use Google APIs to send emails. Your use of Google services is subject to{' '}
@@ -44,11 +48,13 @@ const PrivacyPolicy = () => {
         .
       </p>
 
+      <br/>
       <h2>Your Consent</h2>
       <p>By using our app, you consent to our privacy policy.</p>
 
+      <br/>
       <h2>Contact</h2>
-      <p>If you have any questions, contact us at your-email@example.com.</p>
+      <p>If you have any questions, contact us at pancholi.deep11@gmail.com</p>
     </div>
   );
 };
