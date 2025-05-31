@@ -6,9 +6,5 @@ services:
     startCommand: "uvicorn backend.main:app --host 0.0.0.0 --port 10000"
     plan: free
     envVars:
-      - key: OAUTH_CLIENT_ID
-        value: your-client-id
-      - key: OAUTH_CLIENT_SECRET
-        value: your-client-secret
       - key: FRONTEND_URL
         value: https://mass-email-frontend.onrender.com
