@@ -1,8 +1,8 @@
 from fastapi import APIRouter, UploadFile, File, Header, HTTPException, Form
 from fastapi.responses import StreamingResponse
 import io, csv, asyncio
-from backend.utils.email_utils import send_via_gmail_api
-from backend.utils.auth_utils import get_user_info
+from utils.email_utils import send_via_gmail_api
+from utils.auth_utils import get_user_info
 
 router = APIRouter()
 

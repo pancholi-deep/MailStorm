@@ -2,7 +2,7 @@ import base64
 import requests
 import json
 from email.mime.text import MIMEText
-from backend.core.config import GMAIL_SEND_EMAIL
+from core.config import GMAIL_SEND_EMAIL
 
 def create_message(sender_name, sender_email, to, subject, body, isHtml=False):
     from_header = f"{sender_name} <{sender_email}>"
