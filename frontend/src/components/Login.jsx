@@ -32,7 +32,14 @@ const Login = ({ setUser }) => {
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Left Panel */}
       <div className="w-1/2 flex flex-col justify-center items-start px-12 py-8 text-gray-800 dark:text-gray-200">
-        <h1 className="text-5xl font-extrabold mb-6 text-blue-600 dark:text-blue-400">MailStorm</h1>
+        <div className="flex items-center gap-3 mb-6">
+          <h1 className="text-5xl font-extrabold text-mailstormBlue">MailStorm</h1>
+          <img
+            src="/mailstorm.png" // update the path if needed
+            alt="MailStorm Logo"
+            className="h-15 w-16"
+          />
+        </div>
         <h2 className="text-2xl font-semibold mb-4">Mass Emailing Tool</h2>
         <p className="mb-3">
           MailStorm is a web-based tool designed to help users send personalized bulk emails using their Gmail accounts.
@@ -47,7 +54,7 @@ const Login = ({ setUser }) => {
           href="/privacy"
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-4 text-sm text-blue-500 hover:underline"
+          className="mt-4 text-sm text-mailstormBlue hover:underline"
         >
           Privacy Policy
         </a>
