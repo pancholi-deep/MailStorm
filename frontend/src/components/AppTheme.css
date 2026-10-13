@@ -1,0 +1,48 @@
+.mailstorm-theme {
+  --canvas: #f5f7fc;
+  --surface: #fff;
+  --subtle: #f8fafc;
+  --ink: #172d45;
+  --muted: #607286;
+  --line: #e2e8f1;
+  --blue: #005bba;
+  --tint: #edf5ff;
+  --success: #247051;
+  --error: #b42335;
+  --card-shadow: 0 2px 5px rgb(23 45 69 / 3%), 0 12px 32px rgb(23 45 69 / 3%);
+  --focus-ring: rgb(0 91 186 / 12%);
+}
+.mailstorm-theme.workspace-dark,
+.dark .mailstorm-theme {
+  --canvas: #101b29;
+  --surface: #172536;
+  --subtle: #1c2c3f;
+  --ink: #edf3fa;
+  --muted: #a4b5c8;
+  --line: #33465b;
+  --blue: #85bbff;
+  --tint: #203954;
+  --success: #8dd9b9;
+  --error: #ffabb2;
+  --card-shadow: 0 2px 6px rgb(0 0 0 / 10%), 0 12px 32px rgb(0 0 0 / 10%);
+  --focus-ring: rgb(133 187 255 / 16%);
+}
+.mailstorm-theme .theme-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 22px;
+  cursor: pointer;
+}
+.mailstorm-theme .theme-button:hover {
+  background: var(--subtle);
+  border-color: var(--muted);
+}

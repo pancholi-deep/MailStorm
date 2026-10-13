@@ -30,19 +30,41 @@ def validate_subject(subject):
         )
 
 
-def validate_template(subject, body):
+def validate_field_mapping(mapping):
+    if not isinstance(mapping, dict) or len(mapping) > 32:
+        raise ValueError("Use at most 32 field mappings")
+    for key, column in mapping.items():
+        if (
+            not isinstance(key, str)
+            or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", key)
+            or not isinstance(column, str)
+            or not column.strip()
+            or len(column) > 128
+            or any(c in column for c in "\r\n\x00")
+        ):
+            raise ValueError("Field mappings require a placeholder name and a CSV column")
+        if key in {"name", "email"} and column != key:
+            raise ValueError("The name and email placeholders cannot be remapped")
+    return {key: value.strip().lower() for key, value in mapping.items()}
+
+
+def validate_template(subject, body, available_fields=None):
     validate_subject(subject)
     if not body.strip() or len(body) > settings.max_body_chars or "\x00" in body:
         raise ValueError(
             f"Email body must be nonempty and at most {settings.max_body_chars} characters"
         )
-    unknown = set(PLACEHOLDER.findall(subject + "\n" + body)) - {"name", "email"}
+    unknown = (
+        set(PLACEHOLDER.findall(subject + "\n" + body)) - set(available_fields)
+        if available_fields is not None
+        else set()
+    )
     if unknown:
         raise ValueError("Unknown template placeholder(s): " + ", ".join(sorted(unknown)))
 
 
 def validate_rendered_templates(subject, body, recipients, is_html):
-    validate_template(subject, body)
+    validate_template(subject, body, recipients[0] if recipients else ())
     counts = Counter(PLACEHOLDER.findall(body))
     for recipient in recipients:
         validate_subject(personalize(subject, recipient))

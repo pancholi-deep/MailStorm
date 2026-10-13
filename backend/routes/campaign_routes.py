@@ -29,6 +29,7 @@ async def create(request: Request):
         data.subject,
         data.body,
         data.is_html,
+        data.field_mapping,
     )
     return await thread(request.app.state.store.campaigns.status, user, identifier)
 

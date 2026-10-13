@@ -7,7 +7,7 @@ MailStorm helps you send personalized emails from your Google account and save r
 1. Open MailStorm and **Sign in with Google**.
 2. Under **Recipients**, choose or drop a CSV containing your contacts. The selected filename appears in the upload area.
 3. Enter an **Email Subject** and **Email Body**, or choose **Import template**, select a TXT or HTML file, and click **Use template**.
-4. Personalize your message with `{name}` and `{email}`. If you write HTML, enable **Email body contains HTML**.
+4. Click a CSV field to insert it into your message. Use **Fields & preview** to map fields and check a first-contact preview. If you write HTML, enable **Email body contains HTML**.
 5. Click **Send Emails** and follow the progress in **Send activity**. Use **Download Logs** to export the results.
 
 Saving a campaign is optional. You can send directly from the editor.
@@ -32,7 +32,13 @@ You can type directly into the subject and body fields or import a template. Aft
 
 - `{name}` inserts the first word of the contact's name: `Alice Smith` becomes `Alice`.
 - `{email}` inserts the contact's email address.
-- Other named placeholders are not supported.
+- Other CSV columns work too: a `company` column can be used as `{company}` in the subject or body.
+
+Click a field chip to insert it at the cursor in the subject or body. Open the collapsible **Fields & preview** sidebar on the right of the workspace (above the editor on smaller screens) for instructions, mapping controls, and a first-contact preview. HTML previews show personalized source.
+
+Column headers are trimmed and lowercased. Placeholder names are case sensitive and use letters, numbers, and underscores, starting with a letter or underscore. For a column with spaces, or a template that uses different names, type a placeholder such as `{company}` and select its CSV column, such as `company name`, under **Map placeholders**. Every placeholder must match or map to an existing column. `{name}` and `{email}` remain fixed; map `{full_name}` to `name` if you want the complete name.
+
+Missing fields block saving and sending until you choose a valid column or remove the placeholder. Replacing a CSV checks the mappings again. Blank custom cells insert empty text, so review your contact list as well as the first-contact preview. Values inserted into HTML are escaped as text.
 
 For a plain-text template, save a `.txt` file with this structure:
 
@@ -54,7 +60,7 @@ The HTML subject comment is optional; enter a subject in the editor if the templ
 
 ## Save and reuse campaigns
 
-A campaign combines a name, contact list, subject, message body, and plain-text or HTML choice. For example, save a **Sales pitch** campaign once, then adjust its message for each follow-up without uploading the same contacts again.
+A campaign combines a name, contact list, subject, message body, field mappings, and plain-text or HTML choice. For example, save a **Sales pitch** campaign once, then adjust its message for each follow-up without uploading the same contacts again. Mappings are restored when you reopen a campaign and retained when you save changes or create a copy.
 
 | Action | How it works |
 | --- | --- |
@@ -89,7 +95,8 @@ A successful result means Gmail accepted the message for sending. It does not gu
 ## Troubleshooting
 
 - **The CSV is rejected:** Check its `name` and `email` headers, complete every contact row, and stay within the displayed limits.
-- **A template will not import:** For TXT, include both `Subject:` and `Body:` lines. For HTML, use a `.html` filename. Use only `{name}` and `{email}` as named placeholders.
+- **A template will not import:** For TXT, include both `Subject:` and `Body:` lines. For HTML, use a `.html` filename.
+- **A placeholder is unmapped:** Open **Fields & preview** and select an existing CSV column for it, or remove it from the subject and body. Check mappings again after replacing the contact list.
 - **Sending needs authorization:** Sign in with Google again to renew access.
 - **Sending slows down or pauses:** Gmail may limit sending. MailStorm retries eligible temporary failures automatically; check the activity panel for the current status.
 - **A saved campaign is missing:** Confirm that you signed in with the same Google account and that the campaign was saved before leaving the editor.

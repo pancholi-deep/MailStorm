@@ -1,6 +1,8 @@
 import { request, jsonRequest, jsonBody } from './httpClient';
 import { hashFile } from './fileHash';
 
+export const inspectUploadedContacts = (id) => jsonRequest(`/v1/uploads/${id}/fields`);
+
 export async function uploadContacts(file, signal) {
   const reservation = await jsonRequest('/v1/uploads', {
     ...jsonBody({ size: file.size, sha256: await hashFile(file) }),

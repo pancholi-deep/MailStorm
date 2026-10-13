@@ -5,6 +5,7 @@ export default function SendBar({
   sending,
   editorBusy,
   gmailConnected = true,
+  mappingBlocked = false,
   handleReset,
   handleCancelSending,
 }) {
@@ -32,7 +33,7 @@ export default function SendBar({
         <button
           type="submit"
           className="ws-button primary send-button"
-          disabled={editorBusy || !gmailConnected}
+          disabled={editorBusy || mappingBlocked || !gmailConnected}
         >
           {sending ? 'Sending…' : 'Send Emails'}
           <span aria-hidden="true">↗</span>

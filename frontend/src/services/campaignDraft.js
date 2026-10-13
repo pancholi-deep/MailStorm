@@ -1,5 +1,6 @@
-import { validateCSVContent } from '../utils/validationUtils';
-import { uploadContacts } from '../utils/uploadApi';
+import { inspectCSVContent } from '../utils/validationUtils';
+import { uploadContacts, inspectUploadedContacts } from '../utils/uploadApi';
+import { validateFieldMapping } from '../utils/personalization';
 import { createSavedCampaign, overwriteSavedCampaign } from '../utils/campaignLibraryApi';
 
 // Preserve the create identity and successful upload across a failed save/retry.
@@ -11,6 +12,7 @@ export async function saveCampaignDraft({
   contacts,
   selectedCampaign,
   isHtml,
+  fieldMapping = {},
   copy,
   saveIdentity,
   onUploaded,
@@ -21,12 +23,23 @@ export async function saveCampaignDraft({
   if (!csvFile && !contacts) throw new Error('Upload a contact CSV before saving.');
   let uploadId = contacts?.upload_id;
   let filename = contacts?.filename;
+  const fields = csvFile
+    ? await inspectCSVContent(csvFile)
+    : contacts?.columns
+      ? contacts
+      : await inspectUploadedContacts(uploadId);
+  validateFieldMapping(emailSubject, emailBody, fieldMapping, fields.columns);
   if (csvFile) {
-    await validateCSVContent(csvFile);
     uploadId = await uploadContacts(csvFile);
     filename = csvFile.name;
     // Keep a successful upload if saving fails; retry does not upload again.
-    onUploaded({ upload_id: uploadId, filename });
+    onUploaded({
+      upload_id: uploadId,
+      filename,
+      columns: fields.columns,
+      sample: fields.sample,
+      recipient_count: fields.recipient_count,
+    });
   }
   const name =
     copy && campaignName === selectedCampaign?.name
@@ -39,6 +52,7 @@ export async function saveCampaignDraft({
     subject: emailSubject,
     body: emailBody,
     is_html: isHtml,
+    field_mapping: fieldMapping,
   };
   let saved;
   if (selectedCampaign && !copy) {

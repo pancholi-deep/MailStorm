@@ -94,7 +94,7 @@ def test_entire_import_validated_before_send(api, csv):
     assert not calls
 
 
-@pytest.mark.parametrize("subject", ["Hi\nBcc: bad@example.org", "Hi {unknown}", " "])
+@pytest.mark.parametrize("subject", ["Hi\nBcc: bad@example.org", " "])
 def test_template_validation(api, subject):
     client, calls, _ = api
     assert create(client, subject=subject).status_code == 422

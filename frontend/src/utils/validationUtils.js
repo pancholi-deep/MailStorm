@@ -7,12 +7,13 @@ const EMAIL_PATTERN =
 const MAX_CSV_BYTES = Number(process.env.REACT_APP_MAX_CSV_BYTES || 2097152);
 const MAX_RECIPIENTS = Number(process.env.REACT_APP_MAX_RECIPIENTS || 500);
 
-export async function validateCSVContent(file, readerFn = readFileAsText) {
+export async function inspectCSVContent(file, readerFn = readFileAsText) {
   if (file.size > MAX_CSV_BYTES)
     throw new Error(`CSV exceeds the ${MAX_CSV_BYTES}-byte upload limit`);
   let headers;
   let count = 0;
   const recipients = [];
+  let sample;
   const consume = (data, errors = []) => {
     if (errors.length) throw new Error('CSV contains malformed quoted fields');
     if (!headers) {
@@ -24,6 +25,7 @@ export async function validateCSVContent(file, readerFn = readFileAsText) {
       );
       if (
         headers.length > 32 ||
+        headers.some((header) => !header || header.length > 128 || /[\r\n\0]/.test(header)) ||
         new Set(headers).size !== headers.length ||
         !headers.includes('name') ||
         !headers.includes('email')
@@ -55,6 +57,8 @@ export async function validateCSVContent(file, readerFn = readFileAsText) {
     if (++count > MAX_RECIPIENTS)
       throw new Error(`CSV must contain at most ${MAX_RECIPIENTS} recipients`);
     if (recipients.length < 500) recipients.push({ name, email });
+    if (!sample)
+      sample = Object.fromEntries(headers.map((header, index) => [header, values[index]]));
   };
   if (readerFn !== readFileAsText) {
     const parsed = Papa.parse(await readerFn(file), { delimiter: ',' });
@@ -79,7 +83,11 @@ export async function validateCSVContent(file, readerFn = readFileAsText) {
     });
   }
   if (!count) throw new Error('CSV must contain at least one recipient');
-  return recipients;
+  return { recipients, columns: headers, sample, recipient_count: count };
+}
+
+export async function validateCSVContent(file, readerFn = readFileAsText) {
+  return (await inspectCSVContent(file, readerFn)).recipients;
 }
 
 export async function validateTemplateContent(file, readerFn = readFileAsText) {

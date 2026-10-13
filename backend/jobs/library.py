@@ -72,6 +72,8 @@ class Library:
         if upload["state"] != "uploaded":
             raise HTTPException(409, "Complete a new contact upload before saving")
         template = {key: data[key] for key in ("subject", "body", "is_html")}
+        if data.get("field_mapping"):
+            template["field_mapping"] = data["field_mapping"]
         # Validate all recipients against this template without loading the whole list.
         try:
             count = sum(len(chunk) for chunk in recipient_chunks(objects, upload, template))

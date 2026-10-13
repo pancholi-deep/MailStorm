@@ -73,6 +73,9 @@ export async function sendEmails(formData, { signal, batchId, onEvent, onCampaig
       subject: formData.get('email_subject'),
       body: formData.get('email_body'),
       is_html: formData.get('isHtml') === 'true',
+      ...(formData.get('field_mapping')
+        ? { field_mapping: JSON.parse(formData.get('field_mapping')) }
+        : {}),
     }),
     headers: { 'Content-Type': 'application/json', 'Idempotency-Key': batchId },
   });

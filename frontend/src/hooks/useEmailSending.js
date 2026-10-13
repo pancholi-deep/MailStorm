@@ -71,7 +71,16 @@ export default function useEmailSending(logout) {
     };
   }, [appendLog]);
 
-  const send = async ({ csvFile, uploadId, savedCampaignId, subject, body, isHtml, userEmail }) => {
+  const send = async ({
+    csvFile,
+    uploadId,
+    savedCampaignId,
+    subject,
+    body,
+    isHtml,
+    userEmail,
+    fieldMapping = {},
+  }) => {
     if (controllerRef.current) return;
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -83,11 +92,11 @@ export default function useEmailSending(logout) {
     try {
       if (!uploadId) await validateCSVContent(csvFile);
       if (controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
-      const signature = JSON.stringify(
-        savedCampaignId
-          ? [subject, body, isHtml, userEmail, savedCampaignId]
-          : [subject, body, isHtml, userEmail]
-      );
+      const signatureValues = [subject, body, isHtml, userEmail];
+      if (savedCampaignId) signatureValues.push(savedCampaignId);
+      // Keep existing send identities stable when no custom mapping is used.
+      if (Object.keys(fieldMapping).length) signatureValues.push(fieldMapping);
+      const signature = JSON.stringify(signatureValues);
       if (
         !batchRef.current ||
         batchRef.current.file !== csvFile ||
@@ -110,6 +119,7 @@ export default function useEmailSending(logout) {
       data.append('email_subject', subject);
       data.append('email_body', body);
       data.append('isHtml', String(isHtml));
+      data.append('field_mapping', JSON.stringify(fieldMapping));
       const result = await sendEmails(data, {
         signal: controller.signal,
         batchId: batchRef.current.id,

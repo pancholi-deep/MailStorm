@@ -6,6 +6,10 @@ import { exchangeCodeForTokens } from '../utils/authApi';
 
 import { emailFormPath } from '../utils/config';
 import { saveSession } from '../utils/session';
+import useThemeMode from '../hooks/useThemeMode';
+import ThemeToggle from './ThemeToggle';
+import './AppTheme.css';
+import './Login.css';
 
 const Login = ({ setUser, googleScriptError = false }) => {
   const navigate = useNavigate();
@@ -14,6 +18,7 @@ const Login = ({ setUser, googleScriptError = false }) => {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
+  const [darkMode, setDarkMode] = useThemeMode();
 
   useEffect(() => {
     if (!googleAuthClientId || !scriptLoadedSuccessfully) return;
@@ -77,70 +82,123 @@ const Login = ({ setUser, googleScriptError = false }) => {
       : error;
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Left Panel */}
-      <div className="w-1/2 flex flex-col justify-center items-start px-12 py-8 text-gray-800 dark:text-gray-200">
-        <div className="flex items-center gap-3 mb-6">
-          <h1 className="text-5xl font-extrabold text-mailstormBlue">MailStorm</h1>
-          <img
-            src="/mailstorm.png" // update the path if needed
-            alt="MailStorm Logo"
-            className="h-15 w-16"
-          />
+    <div className={`mailstorm-theme login-page ${darkMode ? 'workspace-dark' : ''}`}>
+      <header className="login-topbar">
+        <div className="login-brand">
+          <img src="/mailstorm.png" alt="" width="38" height="38" />
+          <span>MailStorm</span>
+          <span className="login-brand-caption">Mass Mailer</span>
         </div>
-        <h2 className="text-2xl font-semibold mb-4">Mass Emailing Tool</h2>
-        <p className="mb-3">
-          MailStorm is a web-based tool designed to help users send personalized bulk emails using
-          their Gmail accounts.
-        </p>
-        <p className="mb-3">
-          You can upload a list of recipients and a message template, then easily send tailored
-          emails to each person.
-        </p>
-        <p className="mb-3">
-          Google Sign-In is used to securely send emails on your behalf through the Gmail API. Saved
-          campaigns and delivery records are retained so you can reuse contacts and follow sending
-          progress.
-        </p>
-        <a
-          href="/privacy"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-4 text-sm text-mailstormBlue hover:underline"
-        >
-          Privacy Policy
-        </a>
-      </div>
-
-      {/* Right Panel */}
-      <div className="w-1/2 flex flex-col justify-center items-center px-12 py-8 border-l border-gray-200 dark:border-gray-800">
-        <h2 className="text-2xl font-semibold mb-6 text-gray-700 dark:text-gray-300">
-          Sign in to Get Started
-        </h2>
-        <button
-          id="google-login-btn"
-          type="button"
-          onClick={handleLogin}
-          disabled={!ready || signingIn || googleScriptError}
-          className="flex items-center gap-3 px-6 py-3 rounded-full bg-white border border-gray-300 shadow hover:shadow-md text-gray-700 text-sm font-medium"
-        >
-          <img
-            src="https://developers.google.com/identity/images/g-logo.png"
-            alt=""
-            className="w-5 h-5"
-          />
-          {signingIn
-            ? 'Signing in…'
-            : !ready && !loginError
-              ? 'Loading Google sign-in…'
-              : 'Sign in with Google'}
-        </button>
-        {loginError && (
-          <p role="alert" className="mt-4 text-sm text-red-600">
-            {loginError}
+        <div className="login-header-actions">
+          <a
+            className="login-privacy-link"
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Privacy Policy <span aria-hidden="true">↗</span>
+          </a>
+          <ThemeToggle darkMode={darkMode} setDarkMode={setDarkMode} />
+        </div>
+      </header>
+      <main className="login-layout">
+        <section className="login-intro" aria-labelledby="welcome-heading">
+          <p className="login-eyebrow">A little more personal. A lot less repetitive.</p>
+          <h1 id="welcome-heading">
+            Make every message <span>feel personal.</span>
+          </h1>
+          <p className="login-lead">
+            Your contacts, content, and campaigns in one place. Send personalized emails from your
+            Gmail account and keep your next follow-up ready to go.
           </p>
-        )}
-      </div>
+          <ol className="login-features">
+            <li>
+              <span className="login-step" aria-hidden="true">
+                01
+              </span>
+              <div>
+                <h2>Bring your contacts</h2>
+                <p>Upload a CSV once and reuse it in saved campaigns.</p>
+              </div>
+            </li>
+            <li>
+              <span className="login-step" aria-hidden="true">
+                02
+              </span>
+              <div>
+                <h2>Make it your message</h2>
+                <p>
+                  Write or import a template, map your fields, and preview the personal touches.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span className="login-step" aria-hidden="true">
+                03
+              </span>
+              <div>
+                <h2>Send and stay in the loop</h2>
+                <p>Follow sending progress and pick up your next campaign where you left off.</p>
+              </div>
+            </li>
+          </ol>
+        </section>
+        <section className="login-card" aria-labelledby="sign-in-heading">
+          <div className="login-card-icon" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+              <rect
+                x="3"
+                y="5"
+                width="18"
+                height="14"
+                rx="3"
+                stroke="currentColor"
+                strokeWidth="1.6"
+              />
+              <path
+                d="m4 7 8 6 8-6"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+          <p className="login-eyebrow">Your workspace awaits</p>
+          <h2 id="sign-in-heading">Let’s get started.</h2>
+          <p className="login-card-description">
+            Sign in to open your saved campaigns or create something new.
+          </p>
+          <button
+            id="google-login-btn"
+            type="button"
+            onClick={handleLogin}
+            disabled={!ready || signingIn || googleScriptError}
+            className="google-login-button"
+            aria-busy={signingIn}
+          >
+            <img src="/google-logo.png" alt="" width="20" height="20" />
+            {signingIn
+              ? 'Signing in…'
+              : !ready && !loginError
+                ? 'Loading Google sign-in…'
+                : 'Sign in with Google'}
+          </button>
+          {loginError && (
+            <p role="alert" className="login-error">
+              {loginError}
+            </p>
+          )}
+          <div className="login-connection-note">
+            <strong>Connected through Google</strong>
+            <p>
+              Google sign-in lets MailStorm send emails on your behalf through Gmail. Your saved
+              campaigns and delivery records stay available for reuse and tracking.
+            </p>
+            <p>You can disconnect Gmail from your workspace at any time.</p>
+          </div>
+        </section>
+      </main>
     </div>
   );
 };

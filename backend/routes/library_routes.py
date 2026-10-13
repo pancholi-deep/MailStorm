@@ -9,7 +9,7 @@ router = APIRouter(prefix="/v1/saved-campaigns")
 
 def fields(data):
     values = data.model_dump(
-        include={"name", "filename", "upload_id", "subject", "body", "is_html"}
+        include={"name", "filename", "upload_id", "subject", "body", "is_html", "field_mapping"}
     )
     values["name"] = values["name"].strip()
     if (

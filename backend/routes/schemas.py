@@ -1,7 +1,8 @@
 """Request contracts shared by delivery and reusable campaign endpoints."""
 
 from uuid import UUID
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from backend.utils.validation import validate_field_mapping
 
 
 class Reservation(BaseModel):
@@ -14,6 +15,12 @@ class Campaign(BaseModel):
     subject: str
     body: str
     is_html: bool = False
+    field_mapping: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("field_mapping")
+    @classmethod
+    def valid_mapping(cls, value):
+        return validate_field_mapping(value)
 
 
 class SavedCampaign(Campaign):

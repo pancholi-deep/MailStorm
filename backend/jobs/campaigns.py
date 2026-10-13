@@ -15,8 +15,10 @@ class CampaignRepository:
         self.database = database
         self.vault = vault
 
-    def create(self, owner, key, upload_id, subject, body, is_html):
+    def create(self, owner, key, upload_id, subject, body, is_html, field_mapping=None):
         template = {"subject": subject, "body": body, "is_html": is_html}
+        if field_mapping:
+            template["field_mapping"] = field_mapping
         with self.database.transaction() as db:
             now = self.database.now(db)
             upload = (

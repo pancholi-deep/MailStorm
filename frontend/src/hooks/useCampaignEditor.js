@@ -1,5 +1,7 @@
-import { useState, useRef } from 'react';
-import { validateTemplateContent } from '../utils/validationUtils';
+import { useState, useRef, useEffect } from 'react';
+import { validateTemplateContent, inspectCSVContent } from '../utils/validationUtils';
+import { inspectUploadedContacts } from '../utils/uploadApi';
+import { activeMapping, missingFields } from '../utils/personalization';
 import { saveCampaignDraft } from '../services/campaignDraft';
 
 // Owns only the current draft. Library browsing and delivery have separate hooks.
@@ -25,6 +27,44 @@ export default function useCampaignEditor({ sending, libraryBusy, reset }) {
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [campaignName, setCampaignName] = useState('');
   const [contacts, setContacts] = useState(null);
+  const [mapping, setMapping] = useState({});
+  const [fieldInfo, setFieldInfo] = useState(null);
+  const [fieldsLoading, setFieldsLoading] = useState(false);
+  const [fieldsError, setFieldsError] = useState('');
+  const [inspectionVersion, setInspectionVersion] = useState(0);
+  const fieldMapping = activeMapping(emailSubject, emailBody, mapping);
+  const missing = fieldInfo
+    ? missingFields(emailSubject, emailBody, fieldMapping, fieldInfo.columns)
+    : [];
+  const mappingBlocked = fieldsLoading || Boolean(fieldsError) || missing.length > 0;
+  useEffect(() => {
+    let active = true;
+    setFieldInfo(null);
+    setFieldsError('');
+    if (!csvFile && !contacts) {
+      setFieldsLoading(false);
+      return;
+    }
+    setFieldsLoading(true);
+    const inspection = csvFile
+      ? inspectCSVContent(csvFile)
+      : contacts.columns
+        ? Promise.resolve(contacts)
+        : inspectUploadedContacts(contacts.upload_id);
+    inspection
+      .then((info) => {
+        if (active) setFieldInfo(info);
+      })
+      .catch((error) => {
+        if (active) setFieldsError(error.message);
+      })
+      .finally(() => {
+        if (active) setFieldsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [csvFile, contacts, inspectionVersion]);
   const saveIdentity = useRef(null);
 
   const csvInputRef = useRef(null);
@@ -38,6 +78,14 @@ export default function useCampaignEditor({ sending, libraryBusy, reset }) {
           campaignName !== selectedCampaign.name ||
           emailSubject !== selectedCampaign.subject ||
           emailBody !== selectedCampaign.body ||
+          JSON.stringify(fieldMapping) !==
+            JSON.stringify(
+              activeMapping(
+                selectedCampaign.subject,
+                selectedCampaign.body,
+                selectedCampaign.field_mapping
+              )
+            ) ||
           isHtml !== selectedCampaign.is_html
       )
     : Boolean(campaignName || csvFile || emailSubject || emailBody);
@@ -65,6 +113,7 @@ export default function useCampaignEditor({ sending, libraryBusy, reset }) {
     setEmailSubject(saved.subject);
     setEmailBody(saved.body);
     setIsHtml(saved.is_html);
+    setMapping(saved.field_mapping || {});
     setShowTemplateImport(false);
     clearFileInputs();
   };
@@ -78,6 +127,7 @@ export default function useCampaignEditor({ sending, libraryBusy, reset }) {
       contacts,
       selectedCampaign,
       isHtml,
+      fieldMapping,
       copy,
       saveIdentity,
       onUploaded: (uploaded) => {
@@ -91,11 +141,12 @@ export default function useCampaignEditor({ sending, libraryBusy, reset }) {
       upload_id: saved.upload_id,
       filename: saved.filename,
       recipient_count: saved.recipient_count,
+      ...(fieldInfo ? { columns: fieldInfo.columns, sample: fieldInfo.sample } : {}),
     });
     return saved;
   };
 
-  // When user selects files (just set them, do not parse or validate yet)
+  // CSV inspection follows file selection; templates are applied explicitly.
   const handleFileChange = (e, type) => {
     if (editorBusy) return;
     const file = e.target.files[0];
@@ -104,7 +155,6 @@ export default function useCampaignEditor({ sending, libraryBusy, reset }) {
     if (type === 'csv') {
       if (!file.name.toLowerCase().endsWith('.csv')) {
         setCsvError('Please upload a valid CSV file.');
-        setCsvFile(null);
         return;
       }
       setCsvError('');
@@ -162,6 +212,7 @@ export default function useCampaignEditor({ sending, libraryBusy, reset }) {
     setSelectedCampaign(null);
     setCampaignName('');
     setContacts(null);
+    setMapping({});
     saveIdentity.current = null;
     setShowTemplateImport(false);
     reset();
@@ -189,6 +240,8 @@ export default function useCampaignEditor({ sending, libraryBusy, reset }) {
     emailSubject,
     emailBody,
     isHtml,
+    fieldMapping,
+    mappingBlocked,
     processing,
     selectedCampaign,
     campaignName,
@@ -227,6 +280,15 @@ export default function useCampaignEditor({ sending, libraryBusy, reset }) {
       setEmailBody,
       isHtml,
       setIsHtml,
+      personalization: {
+        fieldInfo,
+        fieldsLoading,
+        fieldsError,
+        fieldMapping,
+        missing,
+        setMapping,
+        retryFields: () => setInspectionVersion((version) => version + 1),
+      },
     },
   };
 }

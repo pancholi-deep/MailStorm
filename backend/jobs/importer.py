@@ -3,7 +3,13 @@ import hashlib
 import io
 from backend.core.config import settings
 from backend.ports import ObjectReader, ImportQueue, UploadReader
-from backend.utils.validation import valid_email, validate_rendered_templates
+from backend.utils.validation import (
+    PLACEHOLDER,
+    valid_email,
+    validate_field_mapping,
+    validate_template,
+    validate_rendered_templates,
+)
 
 
 class LimitedReader(io.RawIOBase):
@@ -26,7 +32,7 @@ class LimitedReader(io.RawIOBase):
         return len(data)
 
 
-def recipient_chunks(objects: ObjectReader, upload, template):
+def recipient_chunks(objects: ObjectReader, upload, template=None, metadata=None):
     """Validate a sealed upload in bounded chunks; consume fully to verify its checksum."""
     with objects.open(upload["id"]) as source:
         limited = LimitedReader(source, upload["size"])
@@ -36,12 +42,29 @@ def recipient_chunks(objects: ObjectReader, upload, template):
                 headers = [value.strip().lower() for value in next(reader)]
                 if (
                     len(headers) > 32
+                    or any(
+                        not h or len(h) > 128 or any(c in h for c in "\r\n\x00") for h in headers
+                    )
                     or len(set(headers)) != len(headers)
                     or not {"name", "email"}.issubset(headers)
                 ):
                     raise ValueError(
                         "CSV must contain unique 'name' and 'email' columns (at most 32 columns)"
                     )
+                mapping = validate_field_mapping((template or {}).get("field_mapping", {}))
+                missing = set(mapping.values()) - set(headers)
+                if missing:
+                    raise ValueError(
+                        "Mapped CSV column(s) not found: " + ", ".join(sorted(missing))
+                    )
+                used = set()
+                if template:
+                    validate_template(
+                        template["subject"], template["body"], set(headers) | set(mapping)
+                    )
+                    used = set(PLACEHOLDER.findall(template["subject"] + "\n" + template["body"]))
+                if metadata is not None:
+                    metadata["columns"] = headers
                 count = 0
                 chunk = []
                 for values in reader:
@@ -68,14 +91,13 @@ def recipient_chunks(objects: ObjectReader, upload, template):
                             f"CSV must contain at most {settings.max_recipients} recipients"
                         )
                     recipient = {"name": row["name"].split()[0], "email": row["email"]}
+                    for key in used - {"name", "email"}:
+                        recipient[key] = row[mapping.get(key, key)]
+                    if metadata is not None and count == 1:
+                        metadata["sample"] = row
                     chunk.append((count, recipient))
                     if len(chunk) == 250:
-                        validate_rendered_templates(
-                            template["subject"],
-                            template["body"],
-                            [r for _, r in chunk],
-                            template["is_html"],
-                        )
+                        validate_chunk(template, chunk)
                         yield chunk
                         chunk = []
                 if not count:
@@ -83,15 +105,25 @@ def recipient_chunks(objects: ObjectReader, upload, template):
                 if limited.size != upload["size"] or limited.digest.hexdigest() != upload["sha256"]:
                     raise ValueError("Upload checksum does not match its reservation")
                 if chunk:
-                    validate_rendered_templates(
-                        template["subject"],
-                        template["body"],
-                        [r for _, r in chunk],
-                        template["is_html"],
-                    )
+                    validate_chunk(template, chunk)
                     yield chunk
             except (UnicodeError, csv.Error, StopIteration) as exc:
                 raise ValueError("CSV must be a nonempty, valid UTF-8 CSV file") from exc
+
+
+def validate_chunk(template, chunk):
+    if template:
+        validate_rendered_templates(
+            template["subject"], template["body"], [r for _, r in chunk], template["is_html"]
+        )
+
+
+def inspect_contacts(objects: ObjectReader, upload):
+    metadata = {}
+    metadata["recipient_count"] = sum(
+        len(chunk) for chunk in recipient_chunks(objects, upload, metadata=metadata)
+    )
+    return metadata
 
 
 def import_campaign(queue: ImportQueue, uploads: UploadReader, objects: ObjectReader, job):

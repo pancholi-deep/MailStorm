@@ -5,14 +5,17 @@ import EmailForm from './EmailForm';
 import { AuthContext } from '../context/authContext';
 import * as api from '../utils/campaignLibraryApi';
 import { sendEmails, listCampaigns } from '../utils/emailApi';
-import { uploadContacts } from '../utils/uploadApi';
+import { uploadContacts, inspectUploadedContacts } from '../utils/uploadApi';
 import { getUploadBatchIdentity } from '../utils/batchUtils';
 
 jest.mock('../utils/gmailApi', () => ({
   getGmailStatus: jest.fn(async () => ({ connected: true, revocation_pending: false })),
   disconnectGmail: jest.fn(),
 }));
-jest.mock('../utils/uploadApi', () => ({ uploadContacts: jest.fn() }));
+jest.mock('../utils/uploadApi', () => ({
+  uploadContacts: jest.fn(),
+  inspectUploadedContacts: jest.fn(),
+}));
 jest.mock('../utils/campaignLibraryApi', () => ({
   listSavedCampaigns: jest.fn(),
   loadSavedCampaign: jest.fn(),
@@ -55,6 +58,11 @@ beforeEach(() => {
   api.listSavedCampaigns.mockResolvedValue([sales]);
   api.loadSavedCampaign.mockResolvedValue(sales);
   uploadContacts.mockResolvedValue('new-contacts');
+  inspectUploadedContacts.mockResolvedValue({
+    columns: ['name', 'email'],
+    sample: { name: 'Alice Smith', email: 'a@example.org' },
+    recipient_count: 2,
+  });
   getUploadBatchIdentity.mockReturnValue({ id: 'send-key', fingerprint: 'send-hash' });
   sendEmails.mockImplementation(async (data, { onEvent }) => {
     onEvent({ type: 'complete', message: 'Finished' });
@@ -90,6 +98,7 @@ function renderForm() {
 async function openSales() {
   fireEvent.click(await screen.findByRole('button', { name: 'Sales pitch 2 contacts' }));
   await screen.findByDisplayValue('<p>Sales pitch</p>');
+  await screen.findByRole('button', { name: 'Insert {name}' });
 }
 
 test('reopens saved content and sends edits without reuploading or autosaving', async () => {
@@ -295,4 +304,45 @@ test('a lost save response retains the uploaded contacts and create identity for
     api.createSavedCampaign.mock.calls[0][0]
   );
   expect(screen.getByLabelText('Email Body')).toHaveValue('Keep this message');
+});
+
+test('restores mappings, marks mapping edits dirty, and saves them to overwrites and copies', async () => {
+  api.loadSavedCampaign.mockResolvedValue({
+    ...sales,
+    body: '{company}',
+    field_mapping: { company: 'business' },
+  });
+  inspectUploadedContacts.mockResolvedValue({
+    columns: ['name', 'email', 'business', 'team'],
+    sample: { name: 'Alice', email: 'a@example.org', business: 'Acme', team: 'Sales' },
+    recipient_count: 2,
+  });
+  renderForm();
+  fireEvent.click(await screen.findByRole('button', { name: 'Sales pitch 2 contacts' }));
+  expect(await screen.findByLabelText('CSV column for {company}')).toHaveValue('business');
+  expect(screen.getByText('Acme')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('CSV column for {company}'), {
+    target: { value: 'team' },
+  });
+  expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  await screen.findByText('Campaign saved.');
+  expect(api.overwriteSavedCampaign).toHaveBeenCalledWith(
+    'sales',
+    expect.objectContaining({ field_mapping: { company: 'team' } })
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Save as new copy' }));
+  await screen.findByText('New campaign copy saved.');
+  expect(api.createSavedCampaign).toHaveBeenCalledWith(
+    expect.objectContaining({ field_mapping: { company: 'team' } })
+  );
+});
+
+test('an unmapped placeholder prevents campaign persistence', async () => {
+  renderForm();
+  await openSales();
+  fireEvent.change(screen.getByLabelText('Email Body'), { target: { value: 'Hi {missing}' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  await screen.findByText('Map these placeholders to CSV columns: missing');
+  expect(api.overwriteSavedCampaign).not.toHaveBeenCalled();
 });

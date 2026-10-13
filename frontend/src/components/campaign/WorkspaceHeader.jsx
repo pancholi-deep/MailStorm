@@ -1,4 +1,5 @@
 import React from 'react';
+import ThemeToggle from '../ThemeToggle';
 
 export default function WorkspaceHeader({
   user,
@@ -22,15 +23,7 @@ export default function WorkspaceHeader({
       </div>
       <div className="account-actions">
         <span className="account-name">{user?.name}</span>
-        <button
-          type="button"
-          className="ws-button theme-button"
-          onClick={() => setDarkMode(!darkMode)}
-          aria-label="Toggle dark mode"
-          aria-pressed={darkMode}
-        >
-          {darkMode ? '☀' : '☾'}
-        </button>
+        <ThemeToggle darkMode={darkMode} setDarkMode={setDarkMode} />
         <button
           type="button"
           className="ws-button"

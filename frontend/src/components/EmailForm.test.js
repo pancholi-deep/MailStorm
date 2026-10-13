@@ -85,9 +85,8 @@ test('manual composition retains the existing controls and validates CSV before 
   });
   fireEvent.change(screen.getByLabelText('Email Subject'), { target: { value: 'Hi' } });
   fireEvent.change(screen.getByLabelText('Email Body'), { target: { value: 'Body' } });
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Send Emails' })).toBeEnabled());
-  fireEvent.click(screen.getByRole('button', { name: 'Send Emails' }));
-  await waitFor(() => expect(screen.getByRole('log')).toHaveTextContent('invalid email address'));
+  expect(await screen.findByRole('alert')).toHaveTextContent('invalid email address');
+  expect(screen.getByRole('button', { name: 'Send Emails' })).toBeDisabled();
   expect(sendEmails).not.toHaveBeenCalled();
 });
 
@@ -191,4 +190,65 @@ test('reconnect protects unsaved editor changes', async () => {
     expect.stringContaining('Unsaved edits will be lost')
   );
   expect(screen.getByLabelText('Email Body')).toHaveValue('Unsaved draft');
+});
+
+test('maps a custom placeholder, previews escaped HTML, and sends the mapping', async () => {
+  renderForm();
+  fireEvent.change(screen.getByLabelText('Upload CSV', { selector: 'input' }), {
+    target: {
+      files: [
+        new File(['name,email,Company Name\nAlice Smith,a@example.org,<Acme & Co>'], 'sales.csv'),
+      ],
+    },
+  });
+  fireEvent.change(screen.getByLabelText('Email Subject'), { target: { value: 'Hi {name}' } });
+  fireEvent.change(screen.getByLabelText('Email Body'), { target: { value: '<p>{company}</p>' } });
+  fireEvent.click(screen.getByLabelText('Email body contains HTML'));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Map these placeholders');
+  expect(screen.getByRole('button', { name: 'Send Emails' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('CSV column for {company}'), {
+    target: { value: 'company name' },
+  });
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByText('<p>&lt;Acme &amp; Co&gt;</p>')).toBeInTheDocument();
+  expect(screen.getByText('Hi Alice')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Send Emails' }));
+  await waitFor(() => expect(sendEmails).toHaveBeenCalledTimes(1));
+  expect(JSON.parse(sendEmails.mock.calls[0][0].get('field_mapping'))).toEqual({
+    company: 'company name',
+  });
+});
+
+test('inserts a CSV field at the subject selection and revalidates a replacement CSV', async () => {
+  renderForm();
+  fireEvent.change(screen.getByLabelText('Upload CSV', { selector: 'input' }), {
+    target: { files: [new File(['name,email,company\nAlice,a@example.org,Acme'], 'sales.csv')] },
+  });
+  const insert = await screen.findByRole('button', { name: 'Insert {company}' });
+  const subject = screen.getByLabelText('Email Subject');
+  fireEvent.change(subject, { target: { value: 'Hi TEAM!' } });
+  fireEvent.focus(subject);
+  subject.setSelectionRange(3, 7);
+  fireEvent.click(insert);
+  expect(subject).toHaveValue('Hi {company}!');
+  fireEvent.change(screen.getByLabelText('Upload CSV', { selector: 'input' }), {
+    target: { files: [new File(['name,email\nBob,b@example.org'], 'replacement.csv')] },
+  });
+  expect(await screen.findByRole('alert')).toHaveTextContent('{company}');
+  expect(screen.getByRole('button', { name: 'Send Emails' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Insert {company}' })).not.toBeInTheDocument();
+});
+
+test('Fields & preview is a workspace sidebar that can collapse and reopen from the editor', async () => {
+  renderForm();
+  const panel = screen.getByRole('complementary', { name: 'Fields & preview' });
+  expect(panel.parentElement).toHaveClass('workspace-layout');
+  const toggle = screen.getByRole('button', { name: 'Fields & preview' });
+  expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  fireEvent.click(toggle);
+  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect(document.getElementById('fields-panel-content')).not.toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Open Fields & preview' }));
+  expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  expect(document.getElementById('fields-panel-content')).toBeVisible();
 });

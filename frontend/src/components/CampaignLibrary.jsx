@@ -14,6 +14,8 @@ export default function CampaignLibrary({
   onSave,
   onNew,
   children,
+  fieldsPanel,
+  fieldsOpen,
 }) {
   const [expanded, setExpanded] = useState(false);
   const nameInput = useRef(null);
@@ -50,7 +52,9 @@ export default function CampaignLibrary({
   });
 
   return (
-    <div className="workspace-layout">
+    <div
+      className={`workspace-layout ${fieldsPanel ? `has-fields-panel ${fieldsOpen ? 'fields-expanded' : 'fields-collapsed'}` : ''}`}
+    >
       <CampaignSidebar
         campaigns={campaigns}
         selected={selected}
@@ -90,6 +94,7 @@ export default function CampaignLibrary({
         )}
         {children}
       </main>
+      {fieldsPanel}
     </div>
   );
 }

@@ -1,12 +1,31 @@
 """Reserve, receive and seal private contact uploads."""
 
 from fastapi import APIRouter, Request, HTTPException
+from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool as thread
 from backend.core.config import settings
 from backend.routes.dependencies import owner, payload
 from backend.routes.schemas import Reservation
+from backend.jobs.importer import inspect_contacts
 
 router = APIRouter(prefix="/v1")
+
+
+@router.get("/uploads/{identifier}/fields")
+async def fields(identifier: str, request: Request):
+    user = await owner(request)
+    upload = await thread(request.app.state.store.uploads.upload, user, identifier)
+    if upload["state"] != "uploaded":
+        raise HTTPException(409, "Complete the contact upload first")
+    try:
+        metadata = await thread(inspect_contacts, request.app.state.objects, upload)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            409, "Contact upload is no longer available; upload the CSV again"
+        ) from exc
+    return JSONResponse(metadata, headers={"Cache-Control": "no-store"})
 
 
 @router.post("/uploads", status_code=201)
