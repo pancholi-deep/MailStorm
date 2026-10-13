@@ -83,8 +83,7 @@ export async function observeCampaign(id, { signal, onEvent }) {
   }
 }
 
-export async function sendEmails(formData, { signal, batchId, onEvent, onCampaign = () => {} }) {
-  const file = formData.get('csv_file');
+export async function uploadContacts(file, signal) {
   const reservation = await jsonRequest('/v1/uploads', { ...jsonBody({ size: file.size, sha256: await hashFile(file) }), signal });
   if (reservation.method === 'PUT') {
     await request(reservation.url, { method: 'PUT', body: file, signal });
@@ -96,9 +95,14 @@ export async function sendEmails(formData, { signal, batchId, onEvent, onCampaig
     if (!response.ok) throw new Error('Object upload failed. Please try again.');
   }
   await jsonRequest(`/v1/uploads/${reservation.id}/complete`, { method: 'POST', signal });
+  return reservation.id;
+}
+
+export async function sendEmails(formData, { signal, batchId, onEvent, onCampaign = () => {} }) {
+  const uploadId = formData.get('upload_id') || await uploadContacts(formData.get('csv_file'), signal);
   // Once creation starts, receive its durable ID before processing a cancellation.
   const job = await jsonRequest('/v1/campaigns', {
-    ...jsonBody({ upload_id: reservation.id, subject: formData.get('email_subject'), body: formData.get('email_body'), is_html: formData.get('isHtml') === 'true' }),
+    ...jsonBody({ upload_id: uploadId, subject: formData.get('email_subject'), body: formData.get('email_body'), is_html: formData.get('isHtml') === 'true' }),
     headers: { 'Content-Type': 'application/json', 'Idempotency-Key': batchId },
   });
   await onCampaign(job.id);

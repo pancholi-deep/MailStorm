@@ -8,7 +8,7 @@ MailStorm (referred to as “we”, “us”, or “our”) respects your privac
 ## Information We Collect
 
 - **Google OAuth Information:** We receive your name, email address, and Google OAuth access and refresh tokens to send messages you request. Google credentials are encrypted on the server. Your browser receives a separate application session token.
-- **Uploaded Data:** Recipient data, message templates, and delivery records are stored to support background sending, progress recovery, and duplicate prevention. Database message data is encrypted. Production uploads are stored in private encrypted object storage; local development uses private files.
+- **Uploaded Data:** Recipient data, message templates, and delivery records are stored to support background sending, progress recovery, and duplicate prevention. Database message data is encrypted. Production uploads are stored in private encrypted object storage; local development uses private files. Saved campaigns retain a reusable contact list, campaign name, filename, and email template. Names, filenames, and templates are encrypted in the database.
 
 ## How We Use Your Information
 
@@ -21,7 +21,7 @@ We do not sell or rent your personal information or Google account data. Recipie
 
 ## Data Retention and Deletion
 
-Application sessions last up to seven days and are stored in browser sessionStorage. Sign out removes the browser session and requests server session revocation. Campaigns continue when a tab closes; Cancel requests that remaining sends stop. Completed, cancelled, invalid, or paused campaigns and their records are retained for 30 days after their last activity by default. Active campaigns remain until they finish or are cancelled. A running worker removes expired records and unreferenced uploads; unused uploads become eligible for deletion after one hour. Idle Google credentials are removed after 30 days when no campaigns or live sessions reference them. Deployment retention settings may vary; backups follow the hosting operator's retention policy. Downloaded logs remain wherever you save them.
+Application sessions last up to seven days and are stored in browser sessionStorage. Sign out removes the browser session and requests server session revocation. Sending jobs continue when a tab closes; Cancel requests that remaining sends stop. Completed, cancelled, invalid, or paused sending jobs and their records are retained for 30 days after their last activity by default. Active sending jobs remain until they finish or are cancelled. Saved campaigns and their contact lists remain until you delete them; overwriting or deleting a saved campaign does not change existing sends or other saved copies. A running worker removes expired records and unreferenced uploads; unused uploads become eligible for deletion after one hour. Idle Google credentials are removed after 30 days when no sending jobs, saved campaigns, or live sessions reference their connection. Deployment retention settings may vary; backups follow the hosting operator's retention policy. Downloaded logs remain wherever you save them.
 
 ## Data Security
 

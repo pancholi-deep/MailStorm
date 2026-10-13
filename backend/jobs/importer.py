@@ -25,11 +25,9 @@ class LimitedReader(io.RawIOBase):
         return len(data)
 
 
-def import_campaign(store, objects, job):
-    upload = store.upload(job['owner'], job['upload_id'])
-    store.begin_import(job)
-    template = job['template']
-    with objects.open(job['upload_id']) as source:
+def recipient_chunks(objects, upload, template):
+    """Validate a sealed upload in bounded chunks; consume fully to verify its checksum."""
+    with objects.open(upload['id']) as source:
         limited = LimitedReader(source, upload['size'])
         with io.TextIOWrapper(io.BufferedReader(limited), encoding='utf-8-sig', newline='') as text:
             reader = csv.reader(text, strict=True)
@@ -56,9 +54,7 @@ def import_campaign(store, objects, job):
                     chunk.append((count, recipient))
                     if len(chunk) == 250:
                         validate_rendered_templates(template['subject'], template['body'], [r for _, r in chunk], template['is_html'])
-                        if not store.import_chunk(job, chunk):
-                            store.release(job, 'cancelled')
-                            return
+                        yield chunk
                         chunk = []
                 if not count:
                     raise ValueError('CSV must contain at least one recipient')
@@ -66,10 +62,17 @@ def import_campaign(store, objects, job):
                     raise ValueError('Upload checksum does not match its reservation')
                 if chunk:
                     validate_rendered_templates(template['subject'], template['body'], [r for _, r in chunk], template['is_html'])
-                    if not store.import_chunk(job, chunk):
-                        store.release(job, 'cancelled')
-                        return
+                    yield chunk
             except (UnicodeError, csv.Error, StopIteration) as exc:
                 raise ValueError('CSV must be a nonempty, valid UTF-8 CSV file') from exc
+
+
+def import_campaign(store, objects, job):
+    upload = store.upload(job['owner'], job['upload_id'])
+    store.begin_import(job)
+    for chunk in recipient_chunks(objects, upload, job['template']):
+        if not store.import_chunk(job, chunk):
+            store.release(job, 'cancelled')
+            return
     store.finish_import(job)
     store.release(job, 'queued')

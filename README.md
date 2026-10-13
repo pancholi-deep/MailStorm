@@ -54,6 +54,34 @@ HTML templates may include `<!-- Subject: Hello {name} -->`; otherwise enter the
 
 The default limits are 2 MiB per CSV, 500 recipients, 998 subject characters, and 1,000,000 body characters. Backend limits are authoritative. Match frontend `REACT_APP_MAX_CSV_BYTES` and `REACT_APP_MAX_RECIPIENTS` to backend limits if customized. Upload bytes are counted as they arrive, with size, timeout, and concurrency limits.
 
+## Saved campaigns
+
+A saved campaign combines a named contact list with an email subject, body, and HTML/plain-text choice. It is reusable and separate from an individual sending job.
+
+The signed-in workspace has a searchable campaign library beside the editor. On mobile, **Browse campaigns** expands the library; choosing a campaign returns to the editor.
+
+1. Choose a CSV under **Recipients** and write directly in the **Message** fields, or select **Import template** → **Use template** to load a TXT/HTML file. Templates can be imported before selecting recipients. Enter a **Campaign name** and click **Save campaign**. Saving validates the entire contact list and message but sends nothing.
+2. Click a campaign in the library. Contacts and content are restored without reuploading the CSV. Search by campaign name to find it quickly.
+3. Edit the subject/body, rename the campaign, or replace the contact CSV. **Save changes** overwrites the selected definition; **Save as new copy** creates an independent definition using the same contact object unless you replace it. Copies default to a “(copy)” name; you can enter another name before saving.
+4. **Send Emails** sends the current editor contents. Unsaved changes can be used for a one-time send. Sending does not automatically overwrite the saved definition. After a completed send, sending the same saved campaign again creates a fresh job; interrupted sends retain their retry identity.
+5. **Delete campaign** removes the saved definition. Existing sends and other copies are retained. Reset/New campaign clears the editor without deleting the saved campaign. Discarding unsaved edits or importing over an existing message asks for confirmation.
+
+Saved campaigns persist until explicitly deleted, including their contact objects. The 30-day send-history cleanup does not remove them. There is a limit of 100 saved campaigns per account. Names, filenames and email content are encrypted in the database. A revision number rejects stale overwrites/deletes with `409`; reopen the current version or save your edits as a copy.
+
+API additions (application bearer session required):
+
+| Route | Behavior |
+| --- | --- |
+| `GET /v1/saved-campaigns` | List your saved names, counts, revisions and timestamps, without loading email bodies. |
+| `GET /v1/saved-campaigns/{id}` | Load content and the retained contact upload reference. |
+| `POST /v1/saved-campaigns` | Create using client-generated UUID `id`, `name`, `filename`, `upload_id`, `subject`, `body`, `is_html`; safe to repeat the identical create request. |
+| `PUT /v1/saved-campaigns/{id}` | Replace the definition with those fields plus the last-read `revision`. |
+| `POST /v1/saved-campaigns/{id}/delete` | Delete with `{revision}`; does not cancel existing jobs. |
+
+Sending still uses `POST /v1/campaigns` with the saved upload reference and a snapshot of the current editor content. Contact objects are immutable: replacing a list changes the saved reference, while existing jobs keep the old reference. Cleanup marks orphan uploads before deleting objects so they cannot be attached to a new definition during deletion.
+
+Schema version **2** adds `saved_campaigns` and its indexes without altering existing sending jobs. Development upgrades automatically on backend startup. In production, stop old worker processes, run `python -m backend.jobs.migrate`, then restart the API and all workers with this version before enabling saves. Old workers must not run alongside the new retention rules.
+
 ## Verification
 
 ```sh
@@ -106,13 +134,13 @@ To exercise a separate worker locally, set `EMBEDDED_WORKER=false`, run `python 
 1. Drain the old request-scoped sender before upgrading. Preserve a backup of its SQLite checkpoints and reconcile unfinished/unknown batches; legacy hash-only records cannot reconstruct campaign payloads. Do not resubmit already-sent legacy lists as new campaigns. Deploy API and frontend together and sign in again.
 2. Provision PostgreSQL and a private S3 bucket. Configure the bucket to permit signed POST uploads from the exact frontend HTTPS origin, including `x-amz-server-side-encryption`. Block public access. Give the service identity only required object read/write/delete permissions for `incoming/` and `sealed/`. Configure lifecycle expiration for incoming objects and noncurrent versions consistent with retention.
 3. Set `APP_ENV=production`, `EMBEDDED_WORKER=false`, `DATABASE_URL`, `S3_BUCKET`, `AWS_REGION`, HTTPS `FRONTEND_URL`, and a shared `CREDENTIAL_ENCRYPTION_KEY`. Generate a Fernet key with `python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'` and put it in the deployment secret manager. Use the same key across API and workers; back it up securely. Changing it requires decrypting/re-encrypting retained records first.
-4. Run `python -m backend.jobs.migrate` once before starting API and worker processes. Startup verifies schema version. The initial migration creates new `job_*` tables without modifying old checkpoints. Subsequent schema changes require an explicit new migration; `create_all` does not alter existing columns.
+4. Run `python -m backend.jobs.migrate` once before starting API and worker processes. Startup verifies schema version. The initial migration creates new `job_*` tables without modifying old checkpoints; version 2 adds `saved_campaigns`. Subsequent schema changes require an explicit new migration; `create_all` does not alter existing columns.
 5. Start the API with Uvicorn and at least one separate `python -m backend.jobs.worker` process. Allow a shutdown grace period exceeding `HTTP_TIMEOUT` plus checkpoint time. More worker processes increase concurrency across owners; one owner's campaigns remain serialized. Keep PostgreSQL connections within its budget (each process has a bounded pool).
 6. Require HTTPS at the proxy, cap request sizes and slow uploads there too, and apply unauthenticated edge/IP rate limits to sign-in. Set alarms for `worker_operation_failed`, `worker_lease_lost`, queue age, paused/unknown campaigns, database lock latency, storage failures, and provider throttling. Check worker liveness separately: API readiness does not prove workers are running. Test backup restoration together with the encryption key.
 
 `render.yaml` describes a paid API, worker, and database deployment; it does not provision the S3 bucket or deploy anything automatically here. Ensure the schema migration completes before the first worker starts (restart the worker after the first migration if services start concurrently).
 
-Terminal/paused campaigns expire after `RETENTION_SECONDS` (default 30 days). Active jobs remain. A running worker performs cleanup; unused uploads become eligible after an hour, and inactive credentials are deleted after retention once no campaign or live session references them. Object deletion precedes upload metadata removal and is retried on failure. Backups and bucket version retention need matching operator policies.
+Terminal/paused sending jobs expire after `RETENTION_SECONDS` (default 30 days). Active jobs and saved campaigns remain. A running worker performs cleanup; unused uploads become eligible after an hour, and inactive credentials are deleted after retention once no sending job, saved campaign, or live session references them. Object deletion precedes upload metadata removal and is retried on failure. Backups and bucket version retention need matching operator policies.
 
 ### Validation and remaining capacity work
 

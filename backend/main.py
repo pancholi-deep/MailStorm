@@ -6,6 +6,7 @@ from backend.jobs.store import Store
 from backend.jobs.worker import Worker
 from backend.storage.objects import Objects
 from backend.routes.campaign_routes import router as campaign_router
+from backend.routes.library_routes import router as library_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.core.config import settings
@@ -55,6 +56,7 @@ app.include_router(auth_router)
 app.include_router(email_router)
 
 app.include_router(campaign_router)
+app.include_router(library_router)
 
 @app.get('/readyz')
 async def ready():

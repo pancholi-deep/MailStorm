@@ -1,5 +1,5 @@
 import { webcrypto } from 'crypto';
-import { forgetBatch, getBatchIdentity } from './batchUtils';
+import { forgetBatch, getBatchIdentity, getUploadBatchIdentity, rememberReusableSend, finishReusableSend } from './batchUtils';
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -22,4 +22,15 @@ test('changed content or an explicit reset creates a new batch', async () => {
   expect(changed.id).not.toBe(first.id);
   forgetBatch(first.fingerprint);
   expect((await getBatchIdentity(file('same'), 'original')).id).not.toBe(first.id);
+});
+
+
+test('a saved campaign keeps retry identity until completion, including after reload', () => {
+  const original = getUploadBatchIdentity('upload-id', 'saved-sales');
+  rememberReusableSend(original.fingerprint, 'job-id');
+  expect(getUploadBatchIdentity('upload-id', 'saved-sales').id).toBe(original.id);
+  finishReusableSend('unrelated-job');
+  expect(getUploadBatchIdentity('upload-id', 'saved-sales').id).toBe(original.id);
+  finishReusableSend('job-id');
+  expect(getUploadBatchIdentity('upload-id', 'saved-sales').id).not.toBe(original.id);
 });

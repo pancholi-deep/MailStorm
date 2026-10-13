@@ -6,7 +6,12 @@ import {
   validateTemplateContent,
 } from "../utils/validationUtils";
 import useEmailSending from "../hooks/useEmailSending";
+import CampaignLibrary from './CampaignLibrary';
+import FileUpload from './FileUpload';
+import { uploadContacts } from '../utils/emailApi';
+import { createSavedCampaign, overwriteSavedCampaign } from '../utils/campaignLibraryApi';
 import { loginPath } from "../utils/config";
+import "./Workspace.css";
 
 
 export default function EmailForm() {
@@ -16,6 +21,7 @@ export default function EmailForm() {
   // File states
   const [csvFile, setCsvFile] = useState(null);
   const [templateFile, setTemplateFile] = useState(null);
+  const [importedTemplateFile, setImportedTemplateFile] = useState(null);
   const [isHtml, setisHtml] = useState(false);
 
   // Validation errors
@@ -26,8 +32,15 @@ export default function EmailForm() {
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
 
-  // Control flow state
-  const [filesProcessed, setFilesProcessed] = useState(false);
+  const [showTemplateImport, setShowTemplateImport] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const processingLock = useRef(false);
+
+  const [selectedCampaign, setSelectedCampaign] = useState(null);
+  const [campaignName, setCampaignName] = useState('');
+  const [contacts, setContacts] = useState(null);
+  const [libraryBusy, setLibraryBusy] = useState(false);
+  const saveIdentity = useRef(null);
 
   // Sending and logs
   const { logs, sending, send, cancel, reset, downloadLogs } = useEmailSending(logout);
@@ -37,7 +50,54 @@ export default function EmailForm() {
   // UI theme
   const [darkMode, setDarkMode] = useState(false);
 
-  const [manualEntryMode, setManualEntryMode] = useState(false);
+  const editorBusy = sending || libraryBusy || processing;
+  const currentHtml = isHtml;
+  const dirty = selectedCampaign
+    ? Boolean(csvFile || contacts?.upload_id !== selectedCampaign.upload_id || campaignName !== selectedCampaign.name || emailSubject !== selectedCampaign.subject || emailBody !== selectedCampaign.body || currentHtml !== selectedCampaign.is_html)
+    : Boolean(campaignName || csvFile || emailSubject || emailBody);
+
+  const loadCampaign = saved => {
+    reset({ forgetIdentity: false });
+    setSelectedCampaign(saved);
+    setCampaignName(saved.name);
+    setContacts({ upload_id: saved.upload_id, filename: saved.filename, recipient_count: saved.recipient_count });
+    setCsvFile(null); setTemplateFile(null); setImportedTemplateFile(null);
+    setCsvError(''); setTemplateError('');
+    setEmailSubject(saved.subject); setEmailBody(saved.body);
+    setisHtml(saved.is_html); setShowTemplateImport(false);
+    if (csvInputRef.current) csvInputRef.current.value = '';
+    if (templateInputRef.current) templateInputRef.current.value = '';
+  };
+
+  const saveCampaign = async copy => {
+    if (!campaignName.trim()) throw new Error('Enter a campaign name.');
+    if (!emailSubject.trim() || !emailBody.trim()) throw new Error('Enter an email subject and body before saving.');
+    if (!csvFile && !contacts) throw new Error('Upload a contact CSV before saving.');
+    let uploadId = contacts?.upload_id;
+    let filename = contacts?.filename;
+    if (csvFile) {
+      await validateCSVContent(csvFile);
+      uploadId = await uploadContacts(csvFile);
+      filename = csvFile.name;
+      // Keep a successful upload if saving fails; retry does not upload again.
+      setContacts({ upload_id: uploadId, filename });
+      setCsvFile(null);
+    }
+    const name = copy && campaignName === selectedCampaign?.name ? `${campaignName.slice(0, 113)} (copy)` : campaignName.trim();
+    const values = { name, upload_id: uploadId, filename, subject: emailSubject, body: emailBody, is_html: currentHtml };
+    let saved;
+    if (selectedCampaign && !copy) {
+      saved = await overwriteSavedCampaign(selectedCampaign.id, { ...values, revision: selectedCampaign.revision });
+    } else {
+      const signature = JSON.stringify(values);
+      if (saveIdentity.current?.signature !== signature) saveIdentity.current = { signature, id: crypto.randomUUID() };
+      saved = await createSavedCampaign({ ...values, id: saveIdentity.current.id });
+      saveIdentity.current = null;
+    }
+    setSelectedCampaign(saved); setCampaignName(saved.name);
+    setContacts({ upload_id: saved.upload_id, filename: saved.filename, recipient_count: saved.recipient_count });
+    return saved;
+  };
 
   const handleLogout = async () => {
     await cancel();
@@ -47,7 +107,7 @@ export default function EmailForm() {
 
   // When user selects files (just set them, do not parse or validate yet)
   const handleFileChange = (e, type) => {
-    if (sending) return;
+    if (editorBusy) return;
     const file = e.target.files[0];
     if (!file) return;
 
@@ -59,6 +119,7 @@ export default function EmailForm() {
       }
       setCsvError("");
       setCsvFile(file);
+      setContacts(null);
     } else if (type === "template") {
       if (!file.name.toLowerCase().endsWith(".txt") && !file.name.toLowerCase().endsWith(".html")) {
         setTemplateError("Please upload a valid TXT or HTML file.");
@@ -77,61 +138,62 @@ export default function EmailForm() {
     handleFileChange({ target: { files: [file] } }, type);
   };
 
-  // Validate and process files only after user clicks the button
   const handleProcessFiles = async () => {
-    setCsvError("");
-    setTemplateError("");
-    if (!csvFile) { setCsvError("Please upload a CSV file."); return; }
-    if (!templateFile) { setTemplateError("Please upload a Template TXT file."); return; }
-    try {
-      await validateCSVContent(csvFile);
-    } catch (error) {
-      setCsvError(error.message);
-      return;
-    }
+    if (editorBusy || processingLock.current) return;
+    setTemplateError('');
+    if (!templateFile) { setTemplateError('Choose a TXT or HTML template first.'); return; }
+    if ((emailSubject || emailBody) && !window.confirm('Replace the current subject and body with this template?')) return;
+    processingLock.current = true;
+    setProcessing(true);
     try {
       const template = await validateTemplateContent(templateFile);
       setEmailSubject(template.subject);
       setEmailBody(template.body);
       setisHtml(template.isHtml);
-      setFilesProcessed(true);
+      setImportedTemplateFile(templateFile);
+      setShowTemplateImport(false);
     } catch (error) {
       setTemplateError(error.message);
+    } finally {
+      processingLock.current = false;
+      setProcessing(false);
     }
   };
 
   // Reset all to upload files again
-  const handleReset = () => {
-    if (sending) return;
+  const resetEditor = () => {
+    setSelectedCampaign(null); setCampaignName(''); setContacts(null);
+    saveIdentity.current = null;
+    setShowTemplateImport(false);
     reset();
     setisHtml(false);
     setCsvFile(null);
     setTemplateFile(null);
+    setImportedTemplateFile(null);
     setCsvError("");
     setTemplateError("");
     setEmailSubject("");
     setEmailBody("");
-    setFilesProcessed(false);
 
     // Clear file input values so user can upload the same file again
     if (csvInputRef.current) csvInputRef.current.value = "";
     if (templateInputRef.current) templateInputRef.current.value = "";
   };
 
+  const handleReset = () => {
+    if (!editorBusy && (!dirty || window.confirm("Discard the unsaved changes in this editor?"))) resetEditor();
+  };
+
   const handleSendEmails = async (e) => {
     e.preventDefault();
+    if (editorBusy) return;
   
-    if (!csvFile) {
+    if (!csvFile && !contacts) {
       alert("Please upload a CSV file.");
       return;
     }
   
-    if (!manualEntryMode && !templateFile) {
-      alert("Please upload a template file or switch to manual entry.");
-      return;
-    }
-  
-    await send({ csvFile, subject: emailSubject, body: emailBody, isHtml: manualEntryMode ? false : isHtml, userEmail: user.email });
+    await send({ csvFile, uploadId: contacts?.upload_id, savedCampaignId: selectedCampaign?.id, subject: emailSubject, body: emailBody, isHtml, userEmail: user.email });
   };
 
   const handleCancelSending = cancel;
@@ -153,290 +215,57 @@ export default function EmailForm() {
   };
 
   return (
-    <div className={`${darkMode ? "dark" : ""}`}>
-      <div className="min-h-screen bg-white dark:bg-gray-950 text-gray-800 dark:text-gray-100 transition-colors">
-        <div className="max-w-2xl mx-auto px-4 py-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold tracking-tight">
-              <span className="text-blue-600 dark:text-blue-400">MailStorm</span>
-              <span className="ml-2 text-gray-600 dark:text-gray-300 text-base font-normal">
-                Mass Mailer
-              </span>
-            </h1>
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className="rounded-full p-2 text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-              aria-label="Toggle dark mode"
-            >
-              {darkMode ? "🌙" : "☀️"}
-            </button>
-          </div>
-          <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-lg font-semibold">👋 Welcome, {user?.name}</h1>
-            <p className="text-sm text-gray-600 dark:text-gray-300">
-              Email: {user?.email}
-            </p>
-          </div>
-          <button
-            className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition bg-red-500 hover:bg-red-600 text-white"
-            onClick={handleLogout}
-          >
-            Sign Out
-          </button>
-        </div>
+    <div className={`mailstorm-workspace ${darkMode ? 'workspace-dark' : ''}`}>
+      <header className="workspace-topbar">
+        <div className="workspace-brand"><img src="/mailstorm.png" alt="" /><span>MailStorm</span><span className="brand-divider" /><span className="brand-caption">Mass Mailer</span></div>
+        <div className="account-actions"><span className="account-name">{user?.name}</span><button type="button" className="ws-button theme-button" onClick={() => setDarkMode(!darkMode)} aria-label="Toggle dark mode" aria-pressed={darkMode}>{darkMode ? '☀' : '☾'}</button><button type="button" className="ws-button" onClick={handleLogout} disabled={libraryBusy || processing}>Sign Out</button></div>
+      </header>
+      <CampaignLibrary selected={selectedCampaign} name={campaignName} onName={setCampaignName}
+        dirty={dirty} disabled={editorBusy} onBusy={setLibraryBusy} onOpen={loadCampaign}
+        onSave={saveCampaign} onNew={resetEditor}>
+        <form onSubmit={handleSendEmails}>
+          <section className="composer-section" aria-labelledby="recipients-heading">
+            <div className="section-heading"><span className="step-number">01</span><div><h2 id="recipients-heading">Recipients</h2><p className="muted">Choose who you want to reach.</p></div>{contacts && <span className="ready-badge">Ready to reuse</span>}</div>
+            <FileUpload
+              id="csv-upload" label={contacts ? 'Replace contact CSV (optional)' : 'Upload CSV'}
+              filename={csvFile?.name || contacts?.filename} status={contacts ? 'Saved file' : 'Selected file'}
+              description={contacts ? `${contacts.recipient_count != null ? contacts.recipient_count.toLocaleString() + ' contacts · ' : ''}Saved with this campaign` : csvFile ? 'CSV selected · checked when you save or send' : 'Drop a CSV here, or choose a file to get started.'}
+              accept=".csv" disabled={editorBusy} inputRef={csvInputRef}
+              onChange={e => handleFileChange(e, 'csv')} onDrop={e => handleFileDrop(e, 'csv')}
+              chooseLabel="Choose CSV" replaceLabel="Replace CSV"
+            />
+            <p className="field-help muted">CSV must include <code>name</code> and <code>email</code> columns.</p>
+            {csvError && <p role="alert" className="workspace-error">{csvError}</p>}
+          </section>
 
-          {/* ✅ CSV Upload - always needed */}
-          {!filesProcessed && (
-            <div className="space-y-4 mb-4">
-              <label htmlFor="csv-upload" className="block text-sm font-medium">
-                Upload CSV
-              </label>
-              <label
-                htmlFor="csv-upload"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => handleFileDrop(e, "csv")}
-                className={`w-full flex flex-col items-center justify-center border-2 border-dashed rounded-md p-4 cursor-pointer transition-colors duration-200 text-sm
-                  ${csvError ? "border-red-500" : "border-gray-300 dark:border-gray-600"}
-                  bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700`}
-              >
-                {csvFile ? (
-                  <div className="text-center">
-                    <p className="text-xs text-green-600 dark:text-green-400">
-                      {csvFile.name} ({(csvFile.size / 1024).toFixed(2)} KB)
-                    </p>
-                  </div>
-                ) : (
-                  <span className="text-xs text-gray-500 dark:text-gray-300">
-                    Drag & drop or click
-                  </span>
-                )}
-              </label>
-              <input
-                id="csv-upload"
-                type="file"
-                accept=".csv"
-                className="sr-only"
-                onChange={(e) => handleFileChange(e, "csv")}
-                ref={csvInputRef}
+          <section className="composer-section" aria-labelledby="message-heading">
+            <div className="section-heading"><span className="step-number">02</span><div><h2 id="message-heading">Message</h2><p className="muted">Make every email feel personal.</p></div><button type="button" className="ws-button import-toggle" disabled={editorBusy} aria-expanded={showTemplateImport} aria-controls="template-import" onClick={() => { setShowTemplateImport(!showTemplateImport); setTemplateError(''); }}>{showTemplateImport ? 'Close import' : 'Import template'}</button></div>
+            {(showTemplateImport || templateFile) && <div id="template-import" className="template-import">
+              <FileUpload
+                id="template-upload" label="Upload Template" filename={templateFile?.name}
+                status={templateFile === importedTemplateFile ? 'Imported file' : 'Selected file'}
+                description={templateFile ? (templateFile === importedTemplateFile ? 'Imported into the subject and body below.' : 'Ready to import · choose Use template to apply it.') : 'Drop a TXT or HTML file here, or choose a template.'}
+                accept=".txt,.html" disabled={editorBusy} inputRef={templateInputRef}
+                onChange={e => { handleFileChange(e, 'template'); setShowTemplateImport(true); }}
+                onDrop={e => { handleFileDrop(e, 'template'); if (!editorBusy) setShowTemplateImport(true); }}
+                chooseLabel="Choose template" replaceLabel="Replace template"
               />
-              {csvError && <p role="alert" className="text-xs text-red-500">{csvError}</p>}
-            </div>
-          )}
+              {showTemplateImport && <div className="template-import-actions">
+                <details className="template-help"><summary>Template format</summary><p>TXT</p><pre>{'Subject: Hello {name}\nBody: Your message here'}</pre><p>HTML</p><pre>{'<!-- Subject: Hello {name} -->\n<p>Your message here</p>'}</pre></details>
+                <button type="button" className="ws-button secondary" disabled={editorBusy || !templateFile} onClick={handleProcessFiles}>{processing ? 'Importing…' : 'Use template'}</button>
+              </div>}
+              {templateError && <p role="alert" className="workspace-error">{templateError}</p>}
+            </div>}
+            <label className="field-label" htmlFor="email-subject">Email Subject</label><input id="email-subject" className="ws-input subject-input" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} disabled={editorBusy} placeholder="A subject worth opening" required />
+            <div className="body-label-row"><label className="field-label" htmlFor="email-body">Email Body</label><label className="html-switch"><input type="checkbox" checked={isHtml} disabled={editorBusy} onChange={e => setisHtml(e.target.checked)} />Email body contains HTML</label></div>
+            <textarea id="email-body" className={`ws-input message-body ${isHtml ? 'html-body' : ''}`} value={emailBody} onChange={e => setEmailBody(e.target.value)} disabled={editorBusy} placeholder={'Hi {name},\n\nLet’s start a conversation…'} required rows={9} />
+            <div className="message-hint"><span>Personalize with <code>{'{name}'}</code> and <code>{'{email}'}</code>.</span><span>{isHtml ? 'HTML source' : 'Plain text'}</span></div>
+          </section>
 
-          <br/>
-          {/* ℹ️ Info box about composing options */}
-          <div className="mb-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-sm border border-blue-200 dark:border-blue-700">
-            You can choose to either <strong>upload a TXT/HTML template</strong> with the email subject and body, or <strong>compose the message manually</strong> using the toggle below.
-          </div>
-
-          {/* ✅ Toggle manual entry mode */}
-          <div className="flex items-center justify-left mb-4">
-            <label className="text-sm mr-2">✏️ Compose Manually</label>
-            <button
-              type="button"
-              onClick={() => { if (!sending) setManualEntryMode(!manualEntryMode); }}
-              aria-pressed={manualEntryMode}
-              className={`inline-flex items-center px-3 py-1 rounded-md text-sm font-medium 
-                ${manualEntryMode ? "bg-green-600 text-white" : "bg-gray-300 dark:bg-gray-700 text-black dark:text-white"} 
-                transition`}
-            >
-              {manualEntryMode ? "On" : "Off"}
-            </button>
-          </div>
-          {manualEntryMode && (
-            <div className="mb-6 p-4 rounded-lg border border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100 shadow-sm">
-              <div className="flex items-start space-x-2">
-                <span className="text-xl">💡</span>
-                <div className="text-sm leading-relaxed">
-                  <p className="font-semibold mb-1">Compose Manually Mode is enabled</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>
-                      You can write your own <span className="font-medium">email subject and body</span> below.
-                    </li>
-                    <li>
-                      Use <code className="bg-white dark:bg-gray-800 px-1 rounded">{`{name}`}</code> placeholders to personalize email subject and body.
-                    </li>
-                    <li>
-                      For example:<code className="bg-white dark:bg-gray-800 px-1 rounded">{`{name}`}</code>placeholders will be replaced with values from 'name' column of your uploaded CSV.
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ✅ File upload mode */}
-          {!manualEntryMode && !filesProcessed && (
-            <>
-              {/* Template Upload */}
-              <div className="space-y-2 mb-4">
-                <label htmlFor="template-upload" className="block text-sm font-medium">
-                  Upload Template
-                </label>
-                <label
-                  htmlFor="template-upload"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => handleFileDrop(e, "template")}
-                  className={`w-full flex flex-col items-center justify-center border-2 border-dashed rounded-md p-4 cursor-pointer transition-colors duration-200 text-sm
-                    ${templateError ? "border-red-500" : "border-gray-300 dark:border-gray-600"}
-                    bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700`}
-                >
-                  {templateFile ? (
-                    <div className="text-center">
-                      <p className="text-xs text-green-600 dark:text-green-400">
-                        {templateFile.name} ({(templateFile.size / 1024).toFixed(2)} KB)
-                      </p>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-gray-500 dark:text-gray-300">
-                      Drag & drop or click
-                    </span>
-                  )}
-                </label>
-                <input
-                  id="template-upload"
-                  type="file"
-                  accept=".txt,.html"
-                  className="sr-only"
-                  onChange={(e) => handleFileChange(e, "template")}
-                  ref={templateInputRef}
-                />
-                {templateError && <p role="alert" className="text-xs text-red-500">{templateError}</p>}
-              </div>
-
-              <div className="flex space-x-2 mb-4">
-                <button
-                  onClick={handleProcessFiles}
-                  className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white 
-                    bg-blue-600 hover:bg-blue-700 rounded-md transition"
-                  disabled={!csvFile || !templateFile}
-                >
-                  Process Files
-                </button>
-                {(csvFile || templateFile) && (
-                  <button
-                    onClick={handleReset}
-                    className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white 
-                      bg-gray-400 hover:bg-gray-500 rounded-md transition"
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* ✅ Manual Entry or Processed Form */}
-          {(manualEntryMode || filesProcessed || sending) && (
-            <form onSubmit={handleSendEmails} className="space-y-4 mb-6">
-              {/* Subject */}
-              <div className="space-y-2">
-                <label htmlFor="email-subject" className="block text-sm font-medium">
-                  Email Subject
-                </label>
-                <input
-                  id="email-subject"
-                  type="text"
-                  value={emailSubject}
-                  onChange={(e) => setEmailSubject(e.target.value)}
-                  placeholder="Enter email subject"
-                  className={`w-full border-2 border-dashed rounded-md p-4 text-sm transition-colors duration-200 
-                    border-gray-300 dark:border-gray-600 
-                    bg-white dark:bg-gray-800 
-                    hover:bg-gray-50 dark:hover:bg-gray-700 
-                    text-gray-800 dark:text-white`}
-                  required
-                />
-              </div>
-
-              {/* Body */}
-              <div className="space-y-2">
-                <label htmlFor="email-body" className="block text-sm font-medium">
-                  Email Body
-                </label>
-                <textarea
-                  id="email-body"
-                  value={emailBody}
-                  onChange={(e) => setEmailBody(e.target.value)}
-                  rows={8}
-                  placeholder="Enter email body"
-                  className={`w-full border-2 border-dashed rounded-md p-4 text-sm transition-colors duration-200 
-                    border-gray-300 dark:border-gray-600 
-                    bg-white dark:bg-gray-800 
-                    hover:bg-gray-50 dark:hover:bg-gray-700 
-                    text-gray-800 dark:text-white`}
-                  required
-                />
-              </div>
-
-              <div className="flex space-x-4">
-                <button
-                  type="submit"
-                  disabled={sending}
-                  className={`inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white
-                    ${sending ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}`}
-                >
-                  {sending ? "Sending..." : "Send Emails"}
-                </button>
-
-                {sending && (
-                  <button
-                    type="button"
-                    onClick={handleCancelSending}
-                    className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white"
-                  >
-                    Cancel
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  disabled={sending}
-                  className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md bg-gray-400 hover:bg-gray-500 text-white"
-                >
-                  Reset
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Logs Section */}
-          <div className="mt-8 bg-gray-50 dark:bg-gray-900 rounded-md p-4 max-h-64 overflow-auto">
-            <h2 className="text-lg font-semibold mb-2">Logs</h2>
-            <div className="text-xs font-mono whitespace-pre-wrap" role="log" aria-live="polite" aria-relevant="additions">
-              {logs.length === 0 ? (
-                <p className="text-gray-400 italic">No logs yet.</p>
-              ) : (
-                logs.map((log, index) => <p key={index}>{log}</p>)
-              )}
-            </div>
-          </div>
-
-          {/* Download Logs Button */}
-          {logs.length > 0 && (
-            <button
-              onClick={handleDownloadLogs}
-              className="mt-3 px-4 py-2 bg-gray-300 dark:bg-gray-700 hover:bg-gray-400 dark:hover:bg-gray-600 rounded-md text-sm"
-            >
-              Download Logs
-            </button>
-          )}
-        </div>
-        </div>
-
-        <footer className="text-center mt-4 mb-6 text-sm text-gray-500 dark:text-gray-400">
-          <a
-            href="/privacy"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:underline"
-          >
-            Privacy Policy
-          </a>
-        </footer>
-      </div>
+          <div className="send-bar"><div className="sender-info"><span className="sender-avatar" aria-hidden="true">{(user?.name || 'M').slice(0, 1).toUpperCase()}</span><div><span className="muted">Sending from</span><strong>{user?.email}</strong></div></div><div className="send-actions">{sending ? <button type="button" className="ws-button" onClick={handleCancelSending}>Cancel Sending</button> : <button type="button" className="ws-button" disabled={editorBusy} onClick={handleReset}>Reset</button>}<button type="submit" className="ws-button primary send-button" disabled={editorBusy}>{sending ? 'Sending…' : 'Send Emails'}<span aria-hidden="true">↗</span></button></div></div>
+        </form>
+        <section className="activity-section" aria-labelledby="activity-heading"><div className="activity-heading"><h2 id="activity-heading"><span className={`activity-dot ${sending ? 'is-active' : ''}`} />Send activity</h2>{logs.length > 0 && <button type="button" className="ws-button" onClick={handleDownloadLogs}>Download Logs</button>}</div><div className={`activity-log ${logs.length ? 'has-logs' : ''}`} role="log" aria-label="Delivery logs" aria-live="polite" aria-relevant="additions" tabIndex={0}>{logs.length ? logs.map((log, idx) => <p key={idx}>{log}</p>) : <p>When you send, delivery updates will appear here.</p>}</div></section>
+      </CampaignLibrary>
+    </div>
   );
 }

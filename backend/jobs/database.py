@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from pathlib import Path
 import time
 from sqlalchemy import (create_engine, MetaData, Table, Column, String, Text, Integer,
-                        Float, Boolean, Index, ForeignKey, select, text)
+                        Float, Boolean, Index, ForeignKey, select, text, update)
 from backend.core.config import settings
 
 metadata = MetaData()
@@ -53,6 +53,19 @@ Index('job_session_owner', sessions.c.owner)
 Index('job_connection_updated', connections.c.updated)
 Index('job_campaign_retention', campaigns.c.state, campaigns.c.updated)
 
+# Reusable definitions are independent of immutable delivery jobs.
+saved_campaigns = Table('saved_campaigns', metadata,
+    Column('id', String(32), primary_key=True),
+    Column('owner', String(64), ForeignKey('job_connections.owner'), nullable=False),
+    Column('upload_id', String(64), ForeignKey('job_uploads.id'), nullable=False),
+    Column('label', Text, nullable=False), Column('secret', Text, nullable=False),
+    Column('revision', Integer, nullable=False, default=1),
+    Column('recipient_count', Integer, nullable=False),
+    Column('created', Float, nullable=False), Column('updated', Float, nullable=False))
+Index('saved_campaign_owner_updated', saved_campaigns.c.owner, saved_campaigns.c.updated)
+Index('saved_campaign_upload', saved_campaigns.c.upload_id)
+SCHEMA_VERSION = 2
+
 
 class Database:
     def __init__(self, url=None):
@@ -66,17 +79,25 @@ class Database:
         self.sqlite = self.engine.dialect.name == 'sqlite'
 
     def migrate(self):
-        # Run once before starting production processes; serialized by deployment migration job.
+        # Additive v1 -> v2 migration; existing jobs, checkpoints and objects stay intact.
+        # Run once before starting production processes.
+        schema.create(self.engine, checkfirst=True)
+        with self.engine.connect() as db:
+            version = db.scalar(select(schema.c.version))
+        if version not in (None, 1, SCHEMA_VERSION):
+            raise RuntimeError('Unsupported database schema version')
         metadata.create_all(self.engine)
         with self.engine.begin() as db:
-            if db.scalar(select(schema.c.version)) is None:
-                db.execute(schema.insert().values(version=1))
+            if version is None:
+                db.execute(schema.insert().values(version=SCHEMA_VERSION))
+            elif version == 1:
+                db.execute(update(schema).where(schema.c.version == 1).values(version=SCHEMA_VERSION))
             if db.scalar(select(gate.c.id)) is None:
                 db.execute(gate.insert().values(id=1, next_at=0))
 
     def verify(self):
         with self.engine.connect() as db:
-            if db.scalar(select(schema.c.version)) != 1:
+            if db.scalar(select(schema.c.version)) != SCHEMA_VERSION:
                 raise RuntimeError('Run python -m backend.jobs.migrate before starting this service')
 
     @contextmanager

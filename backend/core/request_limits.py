@@ -17,7 +17,7 @@ class RequestBodyLimit:
         path = scope['path']
         if path.endswith('/content') or path == '/send-emails':
             limit = settings.max_csv_bytes + settings.max_body_bytes + 131072
-        elif path == '/v1/campaigns':
+        elif path == '/v1/campaigns' or path.startswith('/v1/saved-campaigns'):
             limit = settings.max_body_bytes * 2 + 16384  # JSON escaping; semantic UTF-8 limit remains authoritative.
         else:
             limit = 16384
