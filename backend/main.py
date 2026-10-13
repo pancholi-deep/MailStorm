@@ -3,9 +3,10 @@ import httpx
 import asyncio
 from starlette.concurrency import run_in_threadpool
 from backend.jobs.store import Store
-from backend.jobs.worker import Worker
-from backend.storage.objects import Objects
+from backend.jobs.runtime import create_worker
+from backend.storage.objects import create_objects
 from backend.routes.campaign_routes import router as campaign_router
+from backend.routes.upload_routes import router as upload_router
 from backend.routes.library_routes import router as library_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,12 +22,16 @@ async def lifespan(app):
     async with httpx.AsyncClient(timeout=settings.http_timeout) as client:
         app.state.http_client = client
         app.state.store = await run_in_threadpool(Store)
-        if settings.environment != 'production':
+        if settings.environment != "production":
             await run_in_threadpool(app.state.store.database.migrate)
         await run_in_threadpool(app.state.store.database.verify)
-        app.state.objects = await run_in_threadpool(Objects)
+        app.state.objects = await run_in_threadpool(create_objects)
         stop = asyncio.Event()
-        worker = asyncio.create_task(Worker(app.state.store, app.state.objects, client).run(stop)) if settings.embedded_worker else None
+        worker = (
+            asyncio.create_task(create_worker(app.state.store, app.state.objects, client).run(stop))
+            if settings.embedded_worker
+            else None
+        )
         try:
             yield
         finally:
@@ -55,17 +60,20 @@ async def ping():
 app.include_router(auth_router)
 app.include_router(email_router)
 
+app.include_router(upload_router)
 app.include_router(campaign_router)
 app.include_router(library_router)
 
-@app.get('/readyz')
+
+@app.get("/readyz")
 async def ready():
     await run_in_threadpool(app.state.store.database.verify)
-    return {'status': 'ready'}
+    return {"status": "ready"}
 
-@app.middleware('http')
+
+@app.middleware("http")
 async def no_cache(request, call_next):
     response = await call_next(request)
-    response.headers['Cache-Control'] = 'no-store'
-    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
     return response

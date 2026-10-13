@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useEffect, useState } from 'react';
-import { request } from '../utils/emailApi';
+import { request } from '../utils/httpClient';
 import { clearSession, readSession } from '../utils/session';
 
 export const AuthContext = createContext();
@@ -14,7 +14,9 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (!user) return;
-    const checkSession = () => { if (!readSession()) logout(); };
+    const checkSession = () => {
+      if (!readSession()) logout();
+    };
     const remaining = (readSession()?.expires_at || Date.now()) - Date.now();
     const timer = setTimeout(checkSession, Math.min(Math.max(remaining, 0), 2147483647));
     window.addEventListener('focus', checkSession);

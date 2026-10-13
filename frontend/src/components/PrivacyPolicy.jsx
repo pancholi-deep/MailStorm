@@ -7,9 +7,7 @@ const PrivacyPolicy = () => {
       <h1>Privacy Policy</h1>
       <p>Last updated: {policy.updated}</p>
 
-      <p>
-        {policy.intro}
-      </p>
+      <p>{policy.intro}</p>
 
       <br />
       <h2>Information We Collect</h2>
@@ -31,9 +29,7 @@ const PrivacyPolicy = () => {
 
       <br />
       <h2>Data Sharing and Disclosure</h2>
-      <p>
-        {policy.sharing}
-      </p>
+      <p>{policy.sharing}</p>
 
       <br />
       <h2>Data Retention and Deletion</h2>
@@ -44,9 +40,7 @@ const PrivacyPolicy = () => {
 
       <br />
       <h2>Data Security</h2>
-      <p>
-        {policy.security}
-      </p>
+      <p>{policy.security}</p>
 
       <br />
       <h2>Third-party Services</h2>
@@ -64,7 +58,10 @@ const PrivacyPolicy = () => {
 
       <br />
       <h2>Contact</h2>
-      <p>If you have any questions, contact us at <a href={`mailto:${policy.contact}`}>{policy.contact}</a></p>
+      <p>
+        If you have any questions, contact us at{' '}
+        <a href={`mailto:${policy.contact}`}>{policy.contact}</a>
+      </p>
     </div>
   );
 };

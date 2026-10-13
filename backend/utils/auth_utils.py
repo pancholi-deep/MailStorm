@@ -19,8 +19,13 @@ async def get_user_info(access_token: str, client: httpx.AsyncClient):
         if isinstance(info, dict):
             # The legacy configurable v2 userinfo endpoint calls this field id.
             info["sub"] = info.get("sub") or info.get("id")
-        if (not isinstance(info, dict) or not isinstance(info.get("email"), str)
-                or not valid_email(info["email"]) or not isinstance(info.get("sub"), str) or not info["sub"]):
+        if (
+            not isinstance(info, dict)
+            or not isinstance(info.get("email"), str)
+            or not valid_email(info["email"])
+            or not isinstance(info.get("sub"), str)
+            or not info["sub"]
+        ):
             raise HTTPException(502, "Google returned an incomplete user profile.")
         for key in ("name", "given_name"):
             value = info.get(key)

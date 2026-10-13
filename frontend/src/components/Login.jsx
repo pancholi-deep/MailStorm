@@ -19,29 +19,33 @@ const Login = ({ setUser, googleScriptError = false }) => {
     if (!googleAuthClientId || !scriptLoadedSuccessfully) return;
     let active = true;
     try {
-      codeClientRef.current = createGoogleCodeClient(googleAuthClientId, async ({ code, error: oauthError }) => {
-        if (!active) return;
-        if (oauthError || !code) {
-          setError('Google sign-in was not completed. Please try again.');
-          setSigningIn(false);
-          return;
-        }
-        try {
-          const data = await exchangeCodeForTokens(code);
+      codeClientRef.current = createGoogleCodeClient(
+        googleAuthClientId,
+        async ({ code, error: oauthError }) => {
           if (!active) return;
-          saveSession(data);
-          setUser(data.user);
-          navigate(emailFormPath);
-        } catch (err) {
-          if (active) setError('Unable to sign in. Please try again.');
-        } finally {
-          if (active) setSigningIn(false);
+          if (oauthError || !code) {
+            setError('Google sign-in was not completed. Please try again.');
+            setSigningIn(false);
+            return;
+          }
+          try {
+            const data = await exchangeCodeForTokens(code);
+            if (!active) return;
+            saveSession(data);
+            setUser(data.user);
+            navigate(emailFormPath);
+          } catch (err) {
+            if (active) setError('Unable to sign in. Please try again.');
+          } finally {
+            if (active) setSigningIn(false);
+          }
+        },
+        () => {
+          if (!active) return;
+          setError('Google sign-in could not open or was closed. Please try again.');
+          setSigningIn(false);
         }
-      }, () => {
-        if (!active) return;
-        setError('Google sign-in could not open or was closed. Please try again.');
-        setSigningIn(false);
-      });
+      );
       setReady(true);
     } catch (err) {
       setError('Google sign-in is unavailable. Please reload and try again.');
@@ -86,13 +90,16 @@ const Login = ({ setUser, googleScriptError = false }) => {
         </div>
         <h2 className="text-2xl font-semibold mb-4">Mass Emailing Tool</h2>
         <p className="mb-3">
-          MailStorm is a web-based tool designed to help users send personalized bulk emails using their Gmail accounts.
+          MailStorm is a web-based tool designed to help users send personalized bulk emails using
+          their Gmail accounts.
         </p>
         <p className="mb-3">
-          You can upload a list of recipients and a message template, then easily send tailored emails to each person.
+          You can upload a list of recipients and a message template, then easily send tailored
+          emails to each person.
         </p>
         <p className="mb-3">
-          Google Sign-In is used to securely send emails on your behalf through the Gmail API. Your data is not stored or accessed beyond sending emails.
+          Google Sign-In is used to securely send emails on your behalf through the Gmail API. Your
+          data is not stored or accessed beyond sending emails.
         </p>
         <a
           href="/privacy"
@@ -106,7 +113,9 @@ const Login = ({ setUser, googleScriptError = false }) => {
 
       {/* Right Panel */}
       <div className="w-1/2 flex flex-col justify-center items-center px-12 py-8 border-l border-gray-200 dark:border-gray-800">
-        <h2 className="text-2xl font-semibold mb-6 text-gray-700 dark:text-gray-300">Sign in to Get Started</h2>
+        <h2 className="text-2xl font-semibold mb-6 text-gray-700 dark:text-gray-300">
+          Sign in to Get Started
+        </h2>
         <button
           id="google-login-btn"
           type="button"
@@ -119,9 +128,17 @@ const Login = ({ setUser, googleScriptError = false }) => {
             alt=""
             className="w-5 h-5"
           />
-          {signingIn ? 'Signing in…' : !ready && !loginError ? 'Loading Google sign-in…' : 'Sign in with Google'}
+          {signingIn
+            ? 'Signing in…'
+            : !ready && !loginError
+              ? 'Loading Google sign-in…'
+              : 'Sign in with Google'}
         </button>
-        {loginError && <p role="alert" className="mt-4 text-sm text-red-600">{loginError}</p>}
+        {loginError && (
+          <p role="alert" className="mt-4 text-sm text-red-600">
+            {loginError}
+          </p>
+        )}
       </div>
     </div>
   );

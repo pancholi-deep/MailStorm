@@ -4,13 +4,43 @@ import { MemoryRouter } from 'react-router-dom';
 import EmailForm from './EmailForm';
 import { AuthContext } from '../context/authContext';
 import * as api from '../utils/campaignLibraryApi';
-import { uploadContacts, sendEmails, listCampaigns } from '../utils/emailApi';
+import { sendEmails, listCampaigns } from '../utils/emailApi';
+import { uploadContacts } from '../utils/uploadApi';
 import { getUploadBatchIdentity } from '../utils/batchUtils';
 
-jest.mock('../utils/campaignLibraryApi', () => ({ listSavedCampaigns: jest.fn(), loadSavedCampaign: jest.fn(), createSavedCampaign: jest.fn(), overwriteSavedCampaign: jest.fn(), deleteSavedCampaign: jest.fn() }));
-jest.mock('../utils/emailApi', () => ({ uploadContacts: jest.fn(), sendEmails: jest.fn(), listCampaigns: jest.fn(), cancelCampaign: jest.fn(), observeCampaign: jest.fn(), downloadCampaignLogs: jest.fn() }));
-jest.mock('../utils/batchUtils', () => ({ getBatchIdentity: jest.fn(), getUploadBatchIdentity: jest.fn(), forgetBatch: jest.fn(), rememberReusableSend: jest.fn(), finishReusableSend: jest.fn() }));
-const sales = { id: 'sales', name: 'Sales pitch', filename: 'sales.csv', upload_id: 'stored-contacts', subject: 'Hello {name}', body: '<p>Sales pitch</p>', is_html: true, revision: 1, recipient_count: 2 };
+jest.mock('../utils/uploadApi', () => ({ uploadContacts: jest.fn() }));
+jest.mock('../utils/campaignLibraryApi', () => ({
+  listSavedCampaigns: jest.fn(),
+  loadSavedCampaign: jest.fn(),
+  createSavedCampaign: jest.fn(),
+  overwriteSavedCampaign: jest.fn(),
+  deleteSavedCampaign: jest.fn(),
+}));
+jest.mock('../utils/emailApi', () => ({
+  sendEmails: jest.fn(),
+  listCampaigns: jest.fn(),
+  cancelCampaign: jest.fn(),
+  observeCampaign: jest.fn(),
+  downloadCampaignLogs: jest.fn(),
+}));
+jest.mock('../utils/batchUtils', () => ({
+  getBatchIdentity: jest.fn(),
+  getUploadBatchIdentity: jest.fn(),
+  forgetBatch: jest.fn(),
+  rememberReusableSend: jest.fn(),
+  finishReusableSend: jest.fn(),
+}));
+const sales = {
+  id: 'sales',
+  name: 'Sales pitch',
+  filename: 'sales.csv',
+  upload_id: 'stored-contacts',
+  subject: 'Hello {name}',
+  body: '<p>Sales pitch</p>',
+  is_html: true,
+  revision: 1,
+  recipient_count: 2,
+};
 
 beforeEach(() => {
   listCampaigns.mockResolvedValue([]);
@@ -18,15 +48,36 @@ beforeEach(() => {
   api.loadSavedCampaign.mockResolvedValue(sales);
   uploadContacts.mockResolvedValue('new-contacts');
   getUploadBatchIdentity.mockReturnValue({ id: 'send-key', fingerprint: 'send-hash' });
-  sendEmails.mockImplementation(async (data, { onEvent }) => { onEvent({ type: 'complete', message: 'Finished' }); return { state: 'complete' }; });
-  api.overwriteSavedCampaign.mockImplementation(async (id, data) => ({ ...data, id, revision: data.revision+1, recipient_count: 2 }));
-  api.createSavedCampaign.mockImplementation(async data => ({ ...data, id: 'copy', revision: 1, recipient_count: 2 }));
+  sendEmails.mockImplementation(async (data, { onEvent }) => {
+    onEvent({ type: 'complete', message: 'Finished' });
+    return { state: 'complete' };
+  });
+  api.overwriteSavedCampaign.mockImplementation(async (id, data) => ({
+    ...data,
+    id,
+    revision: data.revision + 1,
+    recipient_count: 2,
+  }));
+  api.createSavedCampaign.mockImplementation(async (data) => ({
+    ...data,
+    id: 'copy',
+    revision: 1,
+    recipient_count: 2,
+  }));
   global.crypto = { randomUUID: jest.fn(() => '00000000-0000-4000-8000-000000000001') };
   jest.spyOn(window, 'confirm').mockReturnValue(true);
 });
 afterEach(() => jest.restoreAllMocks());
 function renderForm() {
-  return render(<MemoryRouter><AuthContext.Provider value={{ user: { name: 'Sender', email: 'sender@gmail.com' }, logout: jest.fn() }}><EmailForm /></AuthContext.Provider></MemoryRouter>);
+  return render(
+    <MemoryRouter>
+      <AuthContext.Provider
+        value={{ user: { name: 'Sender', email: 'sender@gmail.com' }, logout: jest.fn() }}
+      >
+        <EmailForm />
+      </AuthContext.Provider>
+    </MemoryRouter>
+  );
 }
 async function openSales() {
   fireEvent.click(await screen.findByRole('button', { name: 'Sales pitch 2 contacts' }));
@@ -37,7 +88,9 @@ test('reopens saved content and sends edits without reuploading or autosaving', 
   renderForm();
   await openSales();
   expect(screen.getByLabelText('Email body contains HTML')).toBeChecked();
-  fireEvent.change(screen.getByLabelText('Email Body'), { target: { value: '<p>A revised pitch</p>' } });
+  fireEvent.change(screen.getByLabelText('Email Body'), {
+    target: { value: '<p>A revised pitch</p>' },
+  });
   fireEvent.click(screen.getByRole('button', { name: 'Send Emails' }));
   await waitFor(() => expect(sendEmails).toHaveBeenCalledTimes(1));
   const data = sendEmails.mock.calls[0][0];
@@ -49,52 +102,78 @@ test('reopens saved content and sends edits without reuploading or autosaving', 
 });
 
 test('overwrites the current campaign, then creates an independent copy', async () => {
-  renderForm(); await openSales();
+  renderForm();
+  await openSales();
   fireEvent.change(screen.getByLabelText('Email Subject'), { target: { value: 'Revised pitch' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await screen.findByText('Campaign saved.');
-  expect(api.overwriteSavedCampaign).toHaveBeenCalledWith('sales', expect.objectContaining({ subject: 'Revised pitch', revision: 1, upload_id: 'stored-contacts' }));
+  expect(api.overwriteSavedCampaign).toHaveBeenCalledWith(
+    'sales',
+    expect.objectContaining({ subject: 'Revised pitch', revision: 1, upload_id: 'stored-contacts' })
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Save as new copy' }));
   await screen.findByText('New campaign copy saved.');
-  expect(api.createSavedCampaign).toHaveBeenCalledWith(expect.objectContaining({ name: 'Sales pitch (copy)', subject: 'Revised pitch', upload_id: 'stored-contacts' }));
+  expect(api.createSavedCampaign).toHaveBeenCalledWith(
+    expect.objectContaining({
+      name: 'Sales pitch (copy)',
+      subject: 'Revised pitch',
+      upload_id: 'stored-contacts',
+    })
+  );
   expect(uploadContacts).not.toHaveBeenCalled();
 });
 
 test('creates a saved campaign from a new CSV and manual content without sending', async () => {
   renderForm();
   fireEvent.change(screen.getByLabelText(/Campaign name/), { target: { value: 'New sales' } });
-  fireEvent.change(screen.getByLabelText('Upload CSV', { selector: 'input' }), { target: { files: [new File(['name,email\nAlice,a@example.org'], 'sales.csv')] } });
+  fireEvent.change(screen.getByLabelText('Upload CSV', { selector: 'input' }), {
+    target: { files: [new File(['name,email\nAlice,a@example.org'], 'sales.csv')] },
+  });
   fireEvent.change(screen.getByLabelText('Email Subject'), { target: { value: 'Hi' } });
   fireEvent.change(screen.getByLabelText('Email Body'), { target: { value: 'Body' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save campaign' }));
   await screen.findByText('Campaign saved.');
   expect(uploadContacts).toHaveBeenCalledTimes(1);
-  expect(api.createSavedCampaign).toHaveBeenCalledWith(expect.objectContaining({ name: 'New sales', upload_id: 'new-contacts', is_html: false }));
+  expect(api.createSavedCampaign).toHaveBeenCalledWith(
+    expect.objectContaining({ name: 'New sales', upload_id: 'new-contacts', is_html: false })
+  );
   expect(sendEmails).not.toHaveBeenCalled();
 });
 
 test('preserves edits on a stale overwrite and lets the user save a copy', async () => {
-  renderForm(); await openSales();
-  api.overwriteSavedCampaign.mockRejectedValue(new Error('This campaign changed in another tab. Reopen it or save your edits as a new copy.'));
+  renderForm();
+  await openSales();
+  api.overwriteSavedCampaign.mockRejectedValue(
+    new Error('This campaign changed in another tab. Reopen it or save your edits as a new copy.')
+  );
   fireEvent.change(screen.getByLabelText('Email Body'), { target: { value: 'My edits' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('another tab');
   expect(screen.getByLabelText('Email Body')).toHaveValue('My edits');
   fireEvent.click(screen.getByRole('button', { name: 'Save as new copy' }));
   await screen.findByText('New campaign copy saved.');
-  expect(api.createSavedCampaign).toHaveBeenCalledWith(expect.objectContaining({ body: 'My edits' }));
+  expect(api.createSavedCampaign).toHaveBeenCalledWith(
+    expect.objectContaining({ body: 'My edits' })
+  );
 });
 
 test('replaces contacts and preserves the selected campaign identity', async () => {
-  renderForm(); await openSales();
-  fireEvent.change(screen.getByLabelText('Replace contact CSV (optional)', { selector: 'input' }), { target: { files: [new File(['name,email\nBob,b@example.org'], 'new.csv')] } });
+  renderForm();
+  await openSales();
+  fireEvent.change(screen.getByLabelText('Replace contact CSV (optional)', { selector: 'input' }), {
+    target: { files: [new File(['name,email\nBob,b@example.org'], 'new.csv')] },
+  });
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await screen.findByText('Campaign saved.');
-  expect(api.overwriteSavedCampaign).toHaveBeenCalledWith('sales', expect.objectContaining({ upload_id: 'new-contacts', filename: 'new.csv' }));
+  expect(api.overwriteSavedCampaign).toHaveBeenCalledWith(
+    'sales',
+    expect.objectContaining({ upload_id: 'new-contacts', filename: 'new.csv' })
+  );
 });
 
 test('guards unsaved edits when opening another campaign', async () => {
-  renderForm(); await openSales();
+  renderForm();
+  await openSales();
   fireEvent.change(screen.getByLabelText('Email Body'), { target: { value: 'Keep this' } });
   window.confirm.mockReturnValue(false);
   fireEvent.click(screen.getByRole('button', { name: 'Sales pitch 2 contacts' }));
@@ -104,7 +183,8 @@ test('guards unsaved edits when opening another campaign', async () => {
 });
 
 test('deletes a saved definition and clears the editor', async () => {
-  renderForm(); await openSales();
+  renderForm();
+  await openSales();
   api.deleteSavedCampaign.mockResolvedValue({ ok: true });
   fireEvent.click(screen.getByRole('button', { name: 'Delete campaign' }));
   await screen.findByText('Saved campaign deleted. Existing sends are unchanged.');
@@ -120,16 +200,22 @@ test('filters the library and expands it with an accessible mobile control', asy
   expect(browse).toHaveAttribute('aria-expanded', 'false');
   fireEvent.click(browse);
   expect(browse).toHaveAttribute('aria-expanded', 'true');
-  fireEvent.change(screen.getByRole('searchbox', { name: 'Search campaigns' }), { target: { value: 'newsletter' } });
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Search campaigns' }), {
+    target: { value: 'newsletter' },
+  });
   expect(screen.getByText('No matching campaigns')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Sales pitch 2 contacts' })).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'SALES' } });
   await openSales();
-  expect(screen.getByRole('button', { name: 'Browse campaigns' })).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.getByRole('button', { name: 'Browse campaigns' })).toHaveAttribute(
+    'aria-expanded',
+    'false'
+  );
 });
 
 test('new campaign and reset both protect unsaved work', async () => {
-  renderForm(); await openSales();
+  renderForm();
+  await openSales();
   fireEvent.change(screen.getByLabelText('Email Body'), { target: { value: 'Keep this draft' } });
   window.confirm.mockReturnValue(false);
   fireEvent.click(screen.getByRole('button', { name: /New campaign/ }));
@@ -140,10 +226,16 @@ test('new campaign and reset both protect unsaved work', async () => {
 });
 
 test('deletes another campaign from the library without opening it or discarding current edits', async () => {
-  api.listSavedCampaigns.mockResolvedValue([sales, { ...sales, id: 'newsletter', name: 'Newsletter', revision: 3 }]);
+  api.listSavedCampaigns.mockResolvedValue([
+    sales,
+    { ...sales, id: 'newsletter', name: 'Newsletter', revision: 3 },
+  ]);
   api.deleteSavedCampaign.mockResolvedValue({ ok: true });
-  renderForm(); await openSales();
-  fireEvent.change(screen.getByLabelText('Email Body'), { target: { value: 'Keep my sales edits' } });
+  renderForm();
+  await openSales();
+  fireEvent.change(screen.getByLabelText('Email Body'), {
+    target: { value: 'Keep my sales edits' },
+  });
   fireEvent.click(screen.getByRole('button', { name: 'Delete campaign “Newsletter”' }));
   await screen.findByText('Saved campaign deleted. Existing sends are unchanged.');
   expect(api.deleteSavedCampaign).toHaveBeenCalledWith('newsletter', 3);
@@ -154,17 +246,45 @@ test('deletes another campaign from the library without opening it or discarding
 });
 
 test('confirms sidebar deletion and preserves the campaign and editor if deletion fails', async () => {
-  renderForm(); await openSales();
-  fireEvent.change(screen.getByLabelText('Email Body'), { target: { value: 'Unsaved sales edits' } });
+  renderForm();
+  await openSales();
+  fireEvent.change(screen.getByLabelText('Email Body'), {
+    target: { value: 'Unsaved sales edits' },
+  });
   window.confirm.mockReturnValue(false);
   fireEvent.click(screen.getByRole('button', { name: 'Delete campaign “Sales pitch”' }));
   expect(api.deleteSavedCampaign).not.toHaveBeenCalled();
-  expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Unsaved edits will also be discarded.'));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Delete campaign “Sales pitch”' })).toBeEnabled());
+  expect(window.confirm).toHaveBeenCalledWith(
+    expect.stringContaining('Unsaved edits will also be discarded.')
+  );
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Delete campaign “Sales pitch”' })).toBeEnabled()
+  );
   window.confirm.mockReturnValue(true);
   api.deleteSavedCampaign.mockRejectedValue(new Error('Unable to delete campaign.'));
   fireEvent.click(screen.getByRole('button', { name: 'Delete campaign “Sales pitch”' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Unable to delete campaign.');
   expect(screen.getByLabelText('Email Body')).toHaveValue('Unsaved sales edits');
   expect(screen.getByRole('button', { name: 'Sales pitch 2 contacts' })).toBeInTheDocument();
+});
+
+test('a lost save response retains the uploaded contacts and create identity for retry', async () => {
+  api.createSavedCampaign.mockRejectedValueOnce(new Error('Connection interrupted.'));
+  renderForm();
+  fireEvent.change(screen.getByLabelText(/Campaign name/), { target: { value: 'Retry campaign' } });
+  fireEvent.change(screen.getByLabelText('Upload CSV', { selector: 'input' }), {
+    target: { files: [new File(['name,email\nAlice,a@example.org'], 'sales.csv')] },
+  });
+  fireEvent.change(screen.getByLabelText('Email Subject'), { target: { value: 'Hi' } });
+  fireEvent.change(screen.getByLabelText('Email Body'), { target: { value: 'Keep this message' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save campaign' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Connection interrupted.');
+  fireEvent.click(screen.getByRole('button', { name: 'Save campaign' }));
+  await screen.findByText('Campaign saved.');
+  expect(uploadContacts).toHaveBeenCalledTimes(1);
+  expect(crypto.randomUUID).toHaveBeenCalledTimes(1);
+  expect(api.createSavedCampaign.mock.calls[1][0]).toEqual(
+    api.createSavedCampaign.mock.calls[0][0]
+  );
+  expect(screen.getByLabelText('Email Body')).toHaveValue('Keep this message');
 });

@@ -6,10 +6,14 @@ import { exchangeCodeForTokens } from './utils/authApi';
 
 jest.mock('./utils/authApi', () => ({ exchangeCodeForTokens: jest.fn() }));
 // CRA's Jest resolver predates React Router 7's package exports.
-jest.mock('react-router-dom', () => {
-  const navigate = jest.fn();
-  return { useNavigate: () => navigate };
-}, { virtual: true });
+jest.mock(
+  'react-router-dom',
+  () => {
+    const navigate = jest.fn();
+    return { useNavigate: () => navigate };
+  },
+  { virtual: true }
+);
 
 let initCodeClient;
 let requestCode;
@@ -27,7 +31,10 @@ afterEach(() => {
   delete window.google;
 });
 
-function renderLogin({ clientId = 'test.apps.googleusercontent.com', googleScriptError = false } = {}) {
+function renderLogin({
+  clientId = 'test.apps.googleusercontent.com',
+  googleScriptError = false,
+} = {}) {
   render(
     <React.StrictMode>
       <GoogleOAuthProvider clientId={clientId}>
@@ -98,7 +105,11 @@ test('backend token exchange failures are shown without an unhandled rejection',
 
 test('successful sign-in stores a tab session and removes legacy persistent credentials', async () => {
   localStorage.setItem('token', 'legacy');
-  exchangeCodeForTokens.mockResolvedValueOnce({ user: { name: 'Alice', email: 'alice@gmail.com' }, access_token: 'google-token', expires_in: 3600 });
+  exchangeCodeForTokens.mockResolvedValueOnce({
+    user: { name: 'Alice', email: 'alice@gmail.com' },
+    access_token: 'google-token',
+    expires_in: 3600,
+  });
   renderLogin();
   loadGoogleScript();
   await act(async () => initCodeClient.mock.calls[0][0].callback({ code: 'test-code' }));

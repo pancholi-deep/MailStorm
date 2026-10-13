@@ -1,16 +1,22 @@
-import { observeCampaign, request, cancelCampaign, hashFile, sendEmails } from './emailApi';
+import { observeCampaign, cancelCampaign, sendEmails } from './emailApi';
+import { request } from './httpClient';
+import { hashFile } from './fileHash';
 import { saveSession } from './session';
 
 beforeEach(() => {
-  sessionStorage.clear(); localStorage.clear();
+  sessionStorage.clear();
+  localStorage.clear();
   saveSession({ user: { email: 'alice@gmail.com' }, access_token: 'app-session' });
   global.fetch = jest.fn();
 });
-afterEach(() => { delete global.fetch; });
-const response = value => ({ ok: true, json: async () => value });
+afterEach(() => {
+  delete global.fetch;
+});
+const response = (value) => ({ ok: true, json: async () => value });
 
 test('observes durable results and completion without resending messages', async () => {
-  fetch.mockResolvedValueOnce(response({ state: 'complete', accepted: 1, failed: 0, unknown: 0 }))
+  fetch
+    .mockResolvedValueOnce(response({ state: 'complete', accepted: 1, failed: 0, unknown: 0 }))
     .mockResolvedValueOnce(response([{ row_no: 1, state: 'accepted', email: 'a@example.org' }]));
   const onEvent = jest.fn();
   await observeCampaign('job', { onEvent });
@@ -33,20 +39,39 @@ test('expired sessions never send a Bearer null request', async () => {
 });
 
 test('maps backend validation failures to readable errors', async () => {
-  fetch.mockResolvedValue({ ok: false, status: 422, json: async () => ({ detail: 'CSV row requires email' }) });
+  fetch.mockResolvedValue({
+    ok: false,
+    status: 422,
+    json: async () => ({ detail: 'CSV row requires email' }),
+  });
   await expect(request('/v1/campaigns')).rejects.toThrow('CSV row requires email');
 });
 
 test('hashes files in bounded chunks against a known digest', async () => {
-  const file = { size: 3, slice: () => ({ arrayBuffer: async () => new TextEncoder().encode('abc').buffer }) };
-  expect(await hashFile(file)).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  const file = {
+    size: 3,
+    slice: () => ({ arrayBuffer: async () => new TextEncoder().encode('abc').buffer }),
+  };
+  expect(await hashFile(file)).toBe(
+    'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+  );
 });
 
 test('uploads, finalizes, and submits idempotently before observing', async () => {
-  const file = { size: 3, slice: () => ({ arrayBuffer: async () => new TextEncoder().encode('abc').buffer }) };
-  const form = { get: key => ({ csv_file: file, email_subject: 'Hi', email_body: 'Body', isHtml: 'true' }[key]) };
-  fetch.mockResolvedValueOnce(response({ id: 'upload', method: 'PUT', url: '/v1/uploads/upload/content' }))
-    .mockResolvedValueOnce(response({})).mockResolvedValueOnce(response({}))
+  const file = {
+    size: 3,
+    slice: () => ({ arrayBuffer: async () => new TextEncoder().encode('abc').buffer }),
+  };
+  const form = {
+    get: (key) =>
+      ({ csv_file: file, email_subject: 'Hi', email_body: 'Body', isHtml: 'true' })[key],
+  };
+  fetch
+    .mockResolvedValueOnce(
+      response({ id: 'upload', method: 'PUT', url: '/v1/uploads/upload/content' })
+    )
+    .mockResolvedValueOnce(response({}))
+    .mockResolvedValueOnce(response({}))
     .mockResolvedValueOnce(response({ id: 'job', state: 'importing' }))
     .mockResolvedValueOnce(response({ state: 'complete', accepted: 1, failed: 0, unknown: 0 }))
     .mockResolvedValueOnce(response([]));
@@ -57,18 +82,23 @@ test('uploads, finalizes, and submits idempotently before observing', async () =
   expect(JSON.parse(fetch.mock.calls[3][1].body).is_html).toBe(true);
 });
 
-
 test('sending stored contacts bypasses uploads and snapshots the current editor', async () => {
   const form = new FormData();
   form.append('upload_id', 'existing-upload');
   form.append('email_subject', 'Updated subject');
   form.append('email_body', 'Updated body');
   form.append('isHtml', 'false');
-  fetch.mockResolvedValueOnce(response({ id: 'job', state: 'importing' }))
+  fetch
+    .mockResolvedValueOnce(response({ id: 'job', state: 'importing' }))
     .mockResolvedValueOnce(response({ state: 'complete', accepted: 1, failed: 0, unknown: 0 }))
     .mockResolvedValueOnce(response([]));
   await sendEmails(form, { batchId: 'new-send-key', onEvent: jest.fn() });
   expect(fetch.mock.calls[0][0]).toMatch('/v1/campaigns');
-  expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ upload_id: 'existing-upload', subject: 'Updated subject', body: 'Updated body', is_html: false });
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+    upload_id: 'existing-upload',
+    subject: 'Updated subject',
+    body: 'Updated body',
+    is_html: false,
+  });
   expect(fetch.mock.calls.some(([url]) => url.includes('/uploads'))).toBe(false);
 });

@@ -1,4 +1,5 @@
 """Environment-backed settings; secrets are checked when the app starts."""
+
 import os
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -18,20 +19,26 @@ def origin(value: str) -> str:
 
 
 class Settings(BaseModel):
-    frontend_url: str = os.getenv("FRONTEND_URL") or os.getenv("REDIRECT_URL") or "http://localhost:3000"
-    redirect_uri: str = os.getenv("REDIRECT_URI", "")
+    frontend_url: str = (
+        os.getenv("FRONTEND_URL") or os.getenv("REDIRECT_URL") or "http://localhost:3000"
+    )
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
     google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
     google_auth_url: str = os.getenv("GOOGLE_AUTH_URL", "https://accounts.google.com/o/oauth2/auth")
     google_token_url: str = os.getenv("GOOGLE_TOKEN_URL", "https://oauth2.googleapis.com/token")
-    google_user_info_url: str = os.getenv("GOOGLE_USER_INFO_URL", "https://www.googleapis.com/oauth2/v3/userinfo")
-    gmail_send_url: str = os.getenv("GMAIL_SEND_EMAIL", "https://gmail.googleapis.com/gmail/v1/users/me/messages/send")
+    google_user_info_url: str = os.getenv(
+        "GOOGLE_USER_INFO_URL", "https://www.googleapis.com/oauth2/v3/userinfo"
+    )
+    gmail_send_url: str = os.getenv(
+        "GMAIL_SEND_EMAIL", "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+    )
     http_timeout: float = Field(default=float(os.getenv("HTTP_TIMEOUT", "30")), gt=0, le=120)
     max_csv_bytes: int = Field(default=int(os.getenv("MAX_CSV_BYTES", "2097152")), gt=0)
     max_recipients: int = Field(default=int(os.getenv("MAX_RECIPIENTS", "500")), gt=0)
     max_body_chars: int = Field(default=int(os.getenv("MAX_BODY_CHARS", "1000000")), gt=0)
-    batch_db: str = os.getenv("BATCH_DB_PATH", str(Path(__file__).resolve().parents[1] / ".data" / "batches.sqlite3"))
-    batch_retention_seconds: int = Field(default=86400, gt=0)
+    batch_db: str = os.getenv(
+        "BATCH_DB_PATH", str(Path(__file__).resolve().parents[1] / ".data" / "batches.sqlite3")
+    )
     max_active_batches: int = Field(default=8, gt=0)
     environment: str = os.getenv("APP_ENV", "development")
     database_url: str = os.getenv("DATABASE_URL", "")
@@ -43,7 +50,9 @@ class Settings(BaseModel):
     embedded_worker: bool = os.getenv("EMBEDDED_WORKER", "true").lower() == "true"
     lease_seconds: int = Field(default=120, ge=30)
     sender_interval: float = Field(default=float(os.getenv("SENDER_INTERVAL_SECONDS", "1.1")), gt=0)
-    project_interval: float = Field(default=float(os.getenv("PROJECT_INTERVAL_SECONDS", "0.01")), gt=0)
+    project_interval: float = Field(
+        default=float(os.getenv("PROJECT_INTERVAL_SECONDS", "0.01")), gt=0
+    )
     max_attempts: int = Field(default=5, ge=1, le=20)
     max_queued_per_owner: int = Field(default=10, ge=1)
     max_queued_total: int = Field(default=1000, ge=1)
@@ -60,7 +69,9 @@ class Settings(BaseModel):
 
     def validate_startup(self):
         if not self.google_client_id or not self.google_client_secret:
-            raise ValueError("Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in backend/.env or the environment")
+            raise ValueError(
+                "Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in backend/.env or the environment"
+            )
         # Legacy callback REDIRECT_URI values must not break popup sign-in.
         # The code exchange uses the verified request origin instead.
         self.allowed_origins

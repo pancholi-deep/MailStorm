@@ -1,13 +1,23 @@
 import { validateCSVContent, validateTemplateContent } from './validationUtils';
 import { parseTemplate } from './templateUtils';
 
-const csv = text => validateCSVContent({ size: text.length }, async () => text);
+const csv = (text) => validateCSVContent({ size: text.length }, async () => text);
 
 test('accepts quoted commas, escaped quotes, BOM, CRLF, and normalized headers', async () => {
-  await expect(csv('\uFEFF Name , EMAIL\r\n"Doe, ""Jane""",jane@example.org\r\n')).resolves.toEqual([{ name: 'Doe, "Jane"', email: 'jane@example.org' }]);
+  await expect(csv('\uFEFF Name , EMAIL\r\n"Doe, ""Jane""",jane@example.org\r\n')).resolves.toEqual(
+    [{ name: 'Doe, "Jane"', email: 'jane@example.org' }]
+  );
 });
 
-test.each(['name,email', 'name,email\nAlice,', 'name,email\nAlice,broken@@gmail.com', 'name,email\nAlice,a@gmail.com\nBob,broken', 'name,email,email\nAlice,a@gmail.com,a@gmail.com', 'name,email\nAlice,a@gmail.com,b@gmail.com', 'name,email\n"unterminated,a@gmail.com'])('rejects invalid CSV before sending: %s', async text => {
+test.each([
+  'name,email',
+  'name,email\nAlice,',
+  'name,email\nAlice,broken@@gmail.com',
+  'name,email\nAlice,a@gmail.com\nBob,broken',
+  'name,email,email\nAlice,a@gmail.com,a@gmail.com',
+  'name,email\nAlice,a@gmail.com,b@gmail.com',
+  'name,email\n"unterminated,a@gmail.com',
+])('rejects invalid CSV before sending: %s', async (text) => {
   await expect(csv(text)).rejects.toThrow(/CSV/);
 });
 
@@ -19,7 +29,9 @@ test('template parser preserves inline body text and resets HTML format', () => 
 });
 
 test('HTML fragments preserve markup and need not include a full HTML document', async () => {
-  await expect(validateTemplateContent({ name: 'mail.html' }, async () => '<p>Hi {name}</p>')).resolves.toEqual({ subject: '', body: '<p>Hi {name}</p>', isHtml: true });
+  await expect(
+    validateTemplateContent({ name: 'mail.html' }, async () => '<p>Hi {name}</p>')
+  ).resolves.toEqual({ subject: '', body: '<p>Hi {name}</p>', isHtml: true });
 });
 
 test('missing and empty text bodies are rejected', () => {

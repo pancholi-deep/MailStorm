@@ -2,12 +2,18 @@ const SESSION_KEY = 'mailstorm_session';
 
 function clearLegacy() {
   try {
-    ['user', 'token', 'access_token'].forEach(key => localStorage.removeItem(key));
-  } catch { /* Storage may be disabled by the browser. */ }
+    ['user', 'token', 'access_token'].forEach((key) => localStorage.removeItem(key));
+  } catch {
+    /* Storage may be disabled by the browser. */
+  }
 }
 
 export function clearSession() {
-  try { sessionStorage.removeItem(SESSION_KEY); } catch { /* Storage unavailable. */ }
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* Storage unavailable. */
+  }
   clearLegacy();
 }
 
@@ -32,7 +38,12 @@ export function readSession() {
 }
 
 export function saveSession({ user, access_token, expires_in = 3600 }) {
-  if (!user?.email || !access_token || !Number.isFinite(Number(expires_in)) || Number(expires_in) <= 0) {
+  if (
+    !user?.email ||
+    !access_token ||
+    !Number.isFinite(Number(expires_in)) ||
+    Number(expires_in) <= 0
+  ) {
     throw new Error('Google returned an incomplete or expired session.');
   }
   const session = { user, access_token, expires_at: Date.now() + Number(expires_in) * 1000 };

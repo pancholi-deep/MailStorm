@@ -1,71 +1,71 @@
-from uuid import UUID
 from fastapi import APIRouter, Request, HTTPException
-from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool as thread
-from backend.routes.campaign_routes import Campaign, owner, payload
-from backend.jobs.library import Library
+from backend.routes.dependencies import owner, payload
+from backend.routes.schemas import NewSavedCampaign, UpdatedSavedCampaign, Revision
 from backend.utils.validation import validate_template
 
-router = APIRouter(prefix='/v1/saved-campaigns')
-
-
-class SavedCampaign(Campaign):
-    name: str = Field(min_length=1, max_length=120)
-    filename: str = Field(default='contacts.csv', min_length=1, max_length=255)
-
-
-class NewSavedCampaign(SavedCampaign):
-    id: UUID
-
-
-class UpdatedSavedCampaign(SavedCampaign):
-    revision: int = Field(ge=1)
-
-
-class Revision(BaseModel):
-    revision: int = Field(ge=1)
+router = APIRouter(prefix="/v1/saved-campaigns")
 
 
 def fields(data):
-    values = data.model_dump(include={'name', 'filename', 'upload_id', 'subject', 'body', 'is_html'})
-    values['name'] = values['name'].strip()
-    if not values['name'] or not values['filename'].strip() or any(c in values['name'] + values['filename'] for c in '\r\n\x00'):
-        raise HTTPException(422, 'Campaign and contact-list names must be nonempty single lines')
+    values = data.model_dump(
+        include={"name", "filename", "upload_id", "subject", "body", "is_html"}
+    )
+    values["name"] = values["name"].strip()
+    if (
+        not values["name"]
+        or not values["filename"].strip()
+        or any(c in values["name"] + values["filename"] for c in "\r\n\x00")
+    ):
+        raise HTTPException(422, "Campaign and contact-list names must be nonempty single lines")
     try:
-        validate_template(values['subject'], values['body'])
+        validate_template(values["subject"], values["body"])
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     return values
 
 
-@router.get('')
+@router.get("")
 async def listing(request: Request):
     user = await owner(request)
-    return await thread(Library(request.app.state.store).listing, user)
+    return await thread(request.app.state.store.library.listing, user)
 
 
-@router.get('/{identifier}')
+@router.get("/{identifier}")
 async def detail(identifier: str, request: Request):
-    return await thread(Library(request.app.state.store).get, await owner(request), identifier)
+    return await thread(request.app.state.store.library.get, await owner(request), identifier)
 
 
-@router.post('', status_code=201)
+@router.post("", status_code=201)
 async def create(request: Request):
     user = await owner(request)
     data = await payload(request, NewSavedCampaign)
-    return await thread(Library(request.app.state.store).save, request.app.state.objects, user, data.id.hex, fields(data))
+    return await thread(
+        request.app.state.store.library.save,
+        request.app.state.objects,
+        user,
+        data.id.hex,
+        fields(data),
+    )
 
 
-@router.put('/{identifier}')
+@router.put("/{identifier}")
 async def overwrite(identifier: str, request: Request):
     user = await owner(request)
     data = await payload(request, UpdatedSavedCampaign)
-    return await thread(Library(request.app.state.store).save, request.app.state.objects, user, identifier, fields(data), data.revision)
+    return await thread(
+        request.app.state.store.library.save,
+        request.app.state.objects,
+        user,
+        identifier,
+        fields(data),
+        data.revision,
+    )
 
 
-@router.post('/{identifier}/delete')
+@router.post("/{identifier}/delete")
 async def remove(identifier: str, request: Request):
     user = await owner(request)
     data = await payload(request, Revision)
-    await thread(Library(request.app.state.store).remove, user, identifier, data.revision)
-    return {'ok': True}
+    await thread(request.app.state.store.library.remove, user, identifier, data.revision)
+    return {"ok": True}

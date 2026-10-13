@@ -7,11 +7,23 @@ import { saveSession } from './utils/session';
 
 jest.mock('./components/Login', () => () => <div>Login screen</div>);
 
-beforeEach(() => { localStorage.clear(); sessionStorage.clear(); global.fetch = jest.fn(async () => ({ ok: true, json: async () => [] })); });
-afterEach(() => { delete global.fetch; });
+beforeEach(() => {
+  localStorage.clear();
+  sessionStorage.clear();
+  global.fetch = jest.fn(async () => ({ ok: true, json: async () => [] }));
+});
+afterEach(() => {
+  delete global.fetch;
+});
 
 function renderRoute(path) {
-  render(<MemoryRouter initialEntries={[path]}><AuthProvider><App /></AuthProvider></MemoryRouter>);
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </MemoryRouter>
+  );
 }
 
 test('unauthenticated access redirects to login', () => {
