@@ -1,64 +1,59 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from datetime import datetime, timezone
+import logging
+import time
+from fastapi import APIRouter, HTTPException, Request
 from google_auth_oauthlib.flow import Flow
-import requests
-from backend.core.config import (
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
-    REDIRECT_URI,
-    GOOGLE_AUTH_URL,
-    GOOGLE_TOKEN_URL,
-    GOOGLE_USER_INFO_URL,
-)
+from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
+from backend.core.config import settings
+from backend.utils.auth_utils import get_user_info
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
 
 class CodeExchangeRequest(BaseModel):
-    code: str
+    code: str = Field(min_length=1, max_length=4096)
+
+
+def exchange_code(code, redirect_uri):
+    flow = Flow.from_client_config(
+        {"web": {
+            "client_id": settings.google_client_id,
+            "client_secret": settings.google_client_secret,
+            "auth_uri": settings.google_auth_url,
+            "token_uri": settings.google_token_url,
+            "redirect_uris": [redirect_uri],
+        }},
+        scopes=["https://www.googleapis.com/auth/gmail.send", "openid",
+                "https://www.googleapis.com/auth/userinfo.profile",
+                "https://www.googleapis.com/auth/userinfo.email"],
+        redirect_uri=redirect_uri,
+    )
+    flow.fetch_token(code=code, timeout=settings.http_timeout)
+    return flow.credentials
+
 
 @router.post("/auth/google")
-async def auth_google(payload: CodeExchangeRequest):
+async def auth_google(payload: CodeExchangeRequest, request: Request):
+    request_origin = request.headers.get("origin")
+    if request_origin not in settings.allowed_origins or request.headers.get("x-requested-with") != "XmlHttpRequest":
+        raise HTTPException(403, "Invalid sign-in request origin or verification header.")
     try:
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": GOOGLE_CLIENT_ID,
-                    "client_secret": GOOGLE_CLIENT_SECRET,
-                    "auth_uri": GOOGLE_AUTH_URL,
-                    "token_uri": GOOGLE_TOKEN_URL,
-                    "redirect_uris": [REDIRECT_URI],
-                }
-            },
-            scopes=[
-                "https://www.googleapis.com/auth/gmail.send",
-                "openid",
-                "https://www.googleapis.com/auth/userinfo.profile",
-                "https://www.googleapis.com/auth/userinfo.email",
-            ],
-        )
-        if flow.redirect_uri != REDIRECT_URI:
-            flow.redirect_uri = REDIRECT_URI
-
-        # Exchange the code for credentials
-        flow.fetch_token(code=payload.code)
-        credentials = flow.credentials
-
-        userinfo_response = requests.get(
-            GOOGLE_USER_INFO_URL,
-            headers={"Authorization": f"Bearer {credentials.token}"}
-        )
-        userinfo = userinfo_response.json()
-        name = userinfo.get("given_name") if userinfo.get("given_name") else userinfo.get("name")
-        email = userinfo.get("email")
-
-        return {
-            "user": {
-                "name": name,
-                "email": email
-            },
-            "access_token": credentials.token
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Authentication failed: {str(e)}")
-    
+        credentials = await run_in_threadpool(exchange_code, payload.code, request_origin)
+    except Exception as exc:
+        # Never log authorization codes, credentials, or provider response bodies.
+        logger.warning("Google code exchange failed (%s)", type(exc).__name__)
+        raise HTTPException(400, "Google sign-in failed. Please try again.") from exc
+    info = await get_user_info(credentials.token, request.app.state.http_client)
+    expiry = credentials.expiry
+    if expiry is not None and expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=timezone.utc)
+    expires_in = max(0, int((expiry - datetime.now(timezone.utc)).total_seconds())) if expiry else 3600
+    session = await run_in_threadpool(request.app.state.store.login, info, credentials.token,
+        getattr(credentials, 'refresh_token', None), time.time() + expires_in)
+    return {
+        "user": {"name": info.get("given_name") or info.get("name") or info["email"], "email": info["email"]},
+        "access_token": session,
+        "expires_in": settings.session_seconds,
+    }

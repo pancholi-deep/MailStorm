@@ -1,52 +1,58 @@
-import { readFileAsText } from "./fileUtils";
+import Papa from 'papaparse';
+import { readFileAsText } from './fileUtils';
+import { parseTemplate } from './templateUtils';
 
-const personalEmailDomains = [
-  "gmail.com", "yahoo.com", "outlook.com", "hotmail.com",
-  "live.com", "icloud.com", "aol.com", "mail.com",
-];
-
-function validateEmail(email) {
-  email = email.toLowerCase();
-  return personalEmailDomains.some((domain) => email.endsWith("@" + domain));
-}
+const EMAIL_PATTERN = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/;
+const MAX_CSV_BYTES = Number(process.env.REACT_APP_MAX_CSV_BYTES || 2097152);
+const MAX_RECIPIENTS = Number(process.env.REACT_APP_MAX_RECIPIENTS || 500);
 
 export async function validateCSVContent(file, readerFn = readFileAsText) {
-  const text = await readerFn(file);
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length === 0) throw new Error("CSV file is empty");
-
-  const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-  if (!headers.includes("name") || !headers.includes("email")) {
-    throw new Error("CSV must contain 'name' and 'email' columns");
-  }
-
-  const nameIndex = headers.indexOf("name");
-  const emailIndex = headers.indexOf("email");
-
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(",");
-    const name = cols[nameIndex]?.trim() || "";
-    const email = cols[emailIndex]?.trim() || "";
-    if (name === "" || email === "") continue;
-    if (!validateEmail(email)) {
-      throw new Error(`Invalid personal email at row ${i + 1}: ${email}`);
+  if (file.size > MAX_CSV_BYTES) throw new Error(`CSV exceeds the ${MAX_CSV_BYTES}-byte upload limit`);
+  let headers;
+  let count = 0;
+  const recipients = [];
+  const consume = (data, errors = []) => {
+    if (errors.length) throw new Error('CSV contains malformed quoted fields');
+    if (!headers) {
+      headers = data.map(value => value.replace(/^\uFEFF/, '').trim().toLowerCase());
+      if (headers.length > 32 || new Set(headers).size !== headers.length || !headers.includes('name') || !headers.includes('email')) {
+        throw new Error("CSV must contain unique 'name' and 'email' columns");
+      }
+      return;
     }
+    const values = data.map(value => value.trim());
+    if (values.every(value => !value)) return;
+    if (values.length !== headers.length) throw new Error('CSV row has an incorrect number of columns');
+    const name = values[headers.indexOf('name')];
+    const email = values[headers.indexOf('email')];
+    if (!name || !email) throw new Error('CSV row requires name and email');
+    if (name.length > 200 || /[\r\n]/.test(name) || name.includes('\0')) throw new Error('CSV row has an invalid name');
+    const local = email.split('@')[0];
+    if (email.length > 254 || local.length > 64 || !EMAIL_PATTERN.test(email) || local.includes('..') || local.startsWith('.') || local.endsWith('.')) {
+      throw new Error('CSV row has an invalid email address');
+    }
+    if (++count > MAX_RECIPIENTS) throw new Error(`CSV must contain at most ${MAX_RECIPIENTS} recipients`);
+    if (recipients.length < 500) recipients.push({ name, email });
+  };
+  if (readerFn !== readFileAsText) {
+    const parsed = Papa.parse(await readerFn(file), { delimiter: ',' });
+    if (parsed.errors.length) throw new Error('CSV contains malformed quoted fields');
+    parsed.data.forEach(row => consume(row));
+  } else {
+    await new Promise((resolve, reject) => {
+      Papa.parse(file, { delimiter: ',', chunkSize: 262144,
+        step: (result, parser) => {
+          try { consume(result.data, result.errors); }
+          catch (error) { reject(error); parser.abort(); }
+        }, complete: resolve, error: reject,
+      });
+    });
   }
+  if (!count) throw new Error('CSV must contain at least one recipient');
+  return recipients;
 }
 
 export async function validateTemplateContent(file, readerFn = readFileAsText) {
-  const text = await readerFn(file);
-  const lower = text.toLowerCase();
-
-  // Check if this looks like an HTML file by presence of <html> tag or <!DOCTYPE html>
-  const isHtml = lower.includes("<html>") || lower.includes("<!doctype html>");
-
-  if (!lower.includes("subject:") && !isHtml) {
-    throw new Error("Template must contain a 'Subject:' line");
-  }
-
-  if (!lower.includes("body:") && !isHtml) {
-    throw new Error("Template must contain a 'Body:' line");
-  }
+  if (file.size > 2097152) throw new Error('Template exceeds the 2 MB upload limit');
+  return parseTemplate(await readerFn(file), file.name);
 }
-

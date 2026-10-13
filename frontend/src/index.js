@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
@@ -10,15 +10,26 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 const root = ReactDOM.createRoot(document.getElementById('root'));
 const googleAuthClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
 
-root.render(
-  <React.StrictMode>
-    <GoogleOAuthProvider clientId={googleAuthClientId}>
+function Root() {
+  const [googleScriptError, setGoogleScriptError] = useState(false);
+  return (
+    <GoogleOAuthProvider
+      clientId={googleAuthClientId}
+      onScriptLoadSuccess={() => setGoogleScriptError(false)}
+      onScriptLoadError={() => setGoogleScriptError(true)}
+    >
       <BrowserRouter>
         <AuthProvider> 
-          <App />
+          <App googleScriptError={googleScriptError} />
         </AuthProvider>
       </BrowserRouter>
     </GoogleOAuthProvider>
+  );
+}
+
+root.render(
+  <React.StrictMode>
+    <Root />
   </React.StrictMode>
 );
 

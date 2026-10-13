@@ -1,18 +1,18 @@
-// utils/authApi.js
-const backendURL = process.env.REACT_APP_BACKEND_URL;
-const googleAuthUrl = process.env.REACT_APP_GOOGLE_AUTH_ENDPOINT;
+import { backendURL, googleAuthPath } from './config';
 
 export async function exchangeCodeForTokens(code) {
-  const res = await fetch(`${backendURL}${googleAuthUrl}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ code }),
-  });
-
-  if (!res.ok) {
-    throw new Error('Backend auth failed');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45000);
+  try {
+    const res = await fetch(`${backendURL}${googleAuthPath}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XmlHttpRequest' },
+      body: JSON.stringify({ code }),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error('Google sign-in failed. Please try again.');
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
   }
-
-  return res.json();
 }

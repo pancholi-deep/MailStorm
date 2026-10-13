@@ -1,86 +1,49 @@
-from fastapi import APIRouter, UploadFile, File, Header, HTTPException, Form
-from fastapi.responses import StreamingResponse
-import io, csv, asyncio
-from backend.utils.email_utils import send_via_gmail_api
-from backend.utils.auth_utils import get_user_info
+"""Compatibility upload endpoint. Sending is always delegated to durable workers."""
+import hashlib
+import uuid
+from fastapi import APIRouter, Request, HTTPException
+from starlette.concurrency import run_in_threadpool as thread
+from backend.core.config import settings
+from backend.routes.campaign_routes import owner
+from backend.utils.validation import validate_template
 
 router = APIRouter()
 
-@router.post("/send-emails")
-async def send_emails(
-    csv_file: UploadFile = File(...),
-    email_subject: str = Form(...),
-    email_body: str = Form(...),
-    isHtml: str = Form(...),
-    authorization: str = Header(None),
-):
-    isHtml = isHtml.lower() == "true"
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    access_token = authorization.removeprefix("Bearer ").strip()
-    user_info = get_user_info(access_token)
-    sender_name = user_info.get("name")
-    sender_email = user_info.get("email")
-    try:
-        csv_bytes = await csv_file.read()
-    finally:
-        await csv_file.close()
 
-    csv_data = csv_bytes.decode("utf-8")
-
-    async def event_generator():
-        csv_io = io.StringIO(csv_data)
-        reader = csv.DictReader(csv_io)
-
-        row_no, success, fail = 1, 0, 0
-        for row in reader:
-            try:
-                name_raw = row.get('name', '').strip()
-                recipient_email = row.get('email', '').strip()
-
-                if not name_raw or not recipient_email:
-                    missing_fields = [field for field, value in [('name', name_raw), ('email', recipient_email)] if not value]
-                    raise ValueError(f"Missing field(s): {', '.join(missing_fields)}")
-
-                name = name_raw.split()[0]
-
-                personalized_subject = email_subject.replace("{name}", name)
-                personalized_body = email_body.replace("{name}", name)
-
-                # Pass both text and html to the sending function
-                send_via_gmail_api(
-                    access_token,
-                    recipient_email,
-                    personalized_subject,
-                    personalized_body,
-                    sender_name,
-                    sender_email,
-                    isHtml,
-                )
-
-                success += 1
-                msg = f"{row_no}. Success: Name: {name}, Email: {recipient_email}"
-
-            except Exception as err:
-                fail += 1
-                msg = f"{row_no}. Failed: {err}"
-
-            finally:
-                row_no += 1
-
-            try:
-                yield f"data: {msg}\n\n"
-            except (RuntimeError, asyncio.CancelledError):
-                break
-
-            await asyncio.sleep(0)
-
+@router.post('/send-emails', status_code=202)
+async def send_emails(request: Request):
+    user = await owner(request)
+    store, objects = request.app.state.store, request.app.state.objects
+    async with request.form(max_files=1, max_fields=3, max_part_size=settings.max_body_bytes) as form:
+        file = form.get('csv_file')
+        if not hasattr(file, 'read'):
+            raise HTTPException(422, 'CSV file is required')
+        subject, body = form.get('email_subject', ''), form.get('email_body', '')
         try:
-            if success > 0:
-                yield f"data: \nFinished sending emails. \nSuccess: {success}, Failures: {fail}\n\n"
+            key = str(uuid.UUID(request.headers.get('idempotency-key', '')))
+            validate_template(subject, body)
+            if form.get('isHtml', 'false') not in ('true', 'false'):
+                raise ValueError('isHtml must be true or false')
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+        digest, size = hashlib.sha256(), 0
+        while chunk := await file.read(65536):
+            size += len(chunk)
+            if size > settings.max_csv_bytes:
+                raise HTTPException(413, 'CSV exceeds upload limit')
+            digest.update(chunk)
+        if not size:
+            raise HTTPException(422, 'CSV is empty')
+        identifier = await thread(store.reserve_upload, user, size, digest.hexdigest())
+        await file.seek(0)
+        def save():
+            if objects.s3:
+                objects.s3.upload_fileobj(file.file, settings.s3_bucket, f'sealed/{identifier}', ExtraArgs={'ServerSideEncryption': 'AES256'})
             else:
-                yield f"data: \nFailed to send all {fail} emails.\n\n"
-        except (RuntimeError, asyncio.CancelledError):
-            pass
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+                import shutil
+                with (objects.root / identifier).open('xb') as target:
+                    shutil.copyfileobj(file.file, target, 65536)
+        await thread(save)
+        await thread(store.mark_uploaded, user, identifier)
+        campaign = await thread(store.create, user, key, identifier, subject, body, form.get('isHtml') == 'true')
+    return await thread(store.status, user, campaign)

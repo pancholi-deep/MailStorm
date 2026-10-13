@@ -1,26 +1,24 @@
 import React from 'react';
+import policy from '../privacyPolicy.json';
 
 const PrivacyPolicy = () => {
   return (
     <div style={{ padding: '2rem', maxWidth: '800px', margin: 'auto' }}>
       <h1>Privacy Policy</h1>
-      <p>Last updated: May 31, 2025</p>
+      <p>Last updated: {policy.updated}</p>
 
       <p>
-        MailStorm (referred to as “we”, “us”, or “our”) respects your privacy. This Privacy Policy describes how we
-        collect, use, and protect your information when you use our application.
+        {policy.intro}
       </p>
 
       <br />
       <h2>Information We Collect</h2>
       <ul>
         <li>
-          <strong>Google OAuth Information:</strong> We collect your email address and access tokens through Google's
-          secure OAuth 2.0 flow to send emails on your behalf.
+          <strong>Google OAuth Information:</strong> {policy.oauth}
         </li>
         <li>
-          <strong>Uploaded Data:</strong> We process email addresses and content you upload only for sending emails as
-          requested by you. This data is not stored on our servers.
+          <strong>Uploaded Data:</strong> {policy.uploads}
         </li>
       </ul>
 
@@ -34,24 +32,20 @@ const PrivacyPolicy = () => {
       <br />
       <h2>Data Sharing and Disclosure</h2>
       <p>
-        We do not sell, rent, or share your personal information or Google account data with any third parties.
-        Your data is only accessed to perform the core function of sending emails as requested by you.
+        {policy.sharing}
       </p>
 
       <br />
       <h2>Data Retention and Deletion</h2>
       <p>
-        We do not store your uploaded data or email content on our servers. Access tokens are temporarily stored in
-        memory during your active session and are deleted immediately after logout or session expiration.
-        If you would like us to delete any session-related data before expiration, please contact us at
-        <a href="mailto:pancholi.deep11@gmail.com"> pancholi.deep11@gmail.com</a>.
+        {policy.retention} For privacy questions, please contact us at
+        <a href={`mailto:${policy.contact}`}> {policy.contact}</a>.
       </p>
 
       <br />
       <h2>Data Security</h2>
       <p>
-        We use industry-standard security practices. Access tokens are stored only in memory during your session
-        and are never written to disk or persistently stored.
+        {policy.security}
       </p>
 
       <br />
@@ -70,7 +64,7 @@ const PrivacyPolicy = () => {
 
       <br />
       <h2>Contact</h2>
-      <p>If you have any questions, contact us at <a href="mailto:pancholi.deep11@gmail.com">pancholi.deep11@gmail.com</a></p>
+      <p>If you have any questions, contact us at <a href={`mailto:${policy.contact}`}>{policy.contact}</a></p>
     </div>
   );
 };

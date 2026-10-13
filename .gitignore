@@ -11,7 +11,13 @@ build/
 # Optional: logs and OS files
 *.log
 .DS_Store
+samples/
 
 client_secret.json
 
 __pycache__/
+.venv/
+.env.*
+!.env.example
+.pytest_cache/
+backend/.data/

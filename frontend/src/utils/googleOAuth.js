@@ -1,5 +1,5 @@
 // utils/googleOAuth.js
-export function createGoogleCodeClient(clientId, callback) {
+export function createGoogleCodeClient(clientId, callback, onError) {
     if (!window.google || !window.google.accounts?.oauth2) {
       throw new Error('Google API not loaded');
     }
@@ -13,6 +13,6 @@ export function createGoogleCodeClient(clientId, callback) {
       ].join(' '),
       ux_mode: 'popup',
       callback,
+      error_callback: onError,
     });
   }
-  

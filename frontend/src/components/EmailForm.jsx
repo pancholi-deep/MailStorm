@@ -1,24 +1,22 @@
-import React, { useEffect, useState, useRef, useContext } from "react";
+import React, { useState, useRef, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/authContext";
 import {
   validateCSVContent,
   validateTemplateContent,
 } from "../utils/validationUtils";
-import { readFileAsText } from "../utils/fileUtils";
+import useEmailSending from "../hooks/useEmailSending";
+import { loginPath } from "../utils/config";
 
-const backendURL = process.env.REACT_APP_BACKEND_URL;
-const loginEndPoint = process.env.REACT_APP_LOGIN_ENDPOINT;
-const sendEmailsEndPoint = process.env.REACT_APP_SENDEMAIL_ENDPOINT;
 
 export default function EmailForm() {
   const navigate = useNavigate();
-  const { user, setUser, logout } = useContext(AuthContext);
+  const { user, logout } = useContext(AuthContext);
 
   // File states
   const [csvFile, setCsvFile] = useState(null);
   const [templateFile, setTemplateFile] = useState(null);
-  const [isHtml, setisHtml] = useState(null);
+  const [isHtml, setisHtml] = useState(false);
 
   // Validation errors
   const [csvError, setCsvError] = useState("");
@@ -32,9 +30,7 @@ export default function EmailForm() {
   const [filesProcessed, setFilesProcessed] = useState(false);
 
   // Sending and logs
-  const [logs, setLogs] = useState([]);
-  const [sending, setSending] = useState(false);
-  const abortControllerRef = useRef(null);
+  const { logs, sending, send, cancel, reset, downloadLogs } = useEmailSending(logout);
   const csvInputRef = useRef(null);
   const templateInputRef = useRef(null);
 
@@ -43,25 +39,20 @@ export default function EmailForm() {
 
   const [manualEntryMode, setManualEntryMode] = useState(false);
 
-  useEffect(() => {
-    if (!user) {
-      const storedUser = localStorage.getItem("user");
-      if (storedUser) setUser(JSON.parse(storedUser));
-    }
-  }, [user, setUser]);
-
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await cancel();
     logout();
-    navigate(loginEndPoint);
+    navigate(loginPath);
   };
 
   // When user selects files (just set them, do not parse or validate yet)
   const handleFileChange = (e, type) => {
+    if (sending) return;
     const file = e.target.files[0];
     if (!file) return;
 
     if (type === "csv") {
-      if (!file.name.endsWith(".csv")) {
+      if (!file.name.toLowerCase().endsWith(".csv")) {
         setCsvError("Please upload a valid CSV file.");
         setCsvFile(null);
         return;
@@ -69,7 +60,7 @@ export default function EmailForm() {
       setCsvError("");
       setCsvFile(file);
     } else if (type === "template") {
-      if (!file.name.endsWith(".txt") && !file.name.endsWith(".html")) {
+      if (!file.name.toLowerCase().endsWith(".txt") && !file.name.toLowerCase().endsWith(".html")) {
         setTemplateError("Please upload a valid TXT or HTML file.");
         setTemplateFile(null);
         return;
@@ -88,130 +79,32 @@ export default function EmailForm() {
 
   // Validate and process files only after user clicks the button
   const handleProcessFiles = async () => {
-    const isHtml = templateFile.name.endsWith(".html");
-    const content = await readFileAsText(templateFile);
-
-    if (isHtml) {
-      setEmailSubject(""); // optionally extract from <title> or leave empty
-      setEmailBody(content);
-      setisHtml(isHtml);
-    } else {
-      const lines = content.trim().split("\n");
-    
-      let subject = "";
-      let bodyLines = [];
-    
-      const subjectLineIndex = lines.findIndex((line) =>
-        line.toLowerCase().startsWith("subject:")
-      );
-      const bodyLineIndex = lines.findIndex((line) =>
-        line.toLowerCase().startsWith("body:")
-      );
-    
-      if (subjectLineIndex !== -1) {
-        subject = lines[subjectLineIndex].substring(8).trim();
-      }
-    
-      if (bodyLineIndex !== -1) {
-        bodyLines = lines.slice(bodyLineIndex + 1);
-      } else if (subjectLineIndex !== -1) {
-        bodyLines = lines.slice(subjectLineIndex + 1);
-      } else {
-        bodyLines = lines;
-      }
-    
-      const body = bodyLines.join("\n").trim();
-      setEmailSubject(subject);
-      setEmailBody(body);
-    }
-
     setCsvError("");
     setTemplateError("");
-
-    if (!csvFile) {
-      setCsvError("Please upload a CSV file.");
-      return;
-    }
-    if (!templateFile) {
-      setTemplateError("Please upload a Template TXT file.");
-      return;
-    }
-
+    if (!csvFile) { setCsvError("Please upload a CSV file."); return; }
+    if (!templateFile) { setTemplateError("Please upload a Template TXT file."); return; }
     try {
-      // Validate CSV content
-      await validateCSVContent(csvFile, readFileAsText);
-    
-      // Read template content as text
-      const content = await readFileAsText(templateFile);
-    
-      // Validate template content
-      await validateTemplateContent(templateFile, () => content);
-    
-      // Try to extract subject from HTML comment first
-      const subjectMatch = content.match(/<!--\s*Subject:\s*(.*?)\s*-->/i);
-    
-      let subject = "";
-      let bodyLines = [];
-    
-      if (subjectMatch) {
-        // Subject found in HTML comment
-        subject = subjectMatch[1].trim();
-    
-        // Remove the subject comment line from body to avoid duplication
-        // Split by lines, filter out the subject comment line
-        const lines = content
-          .split("\n")
-          .filter(line => !line.match(/<!--\s*Subject:/i));
-    
-        bodyLines = lines;
-      } else {
-        // No HTML comment subject found — fallback to parsing text lines
-    
-        // Split content by lines (trimmed)
-        const lines = content.trim().split("\n");
-    
-        // Find line starting with "subject:"
-        const subjectLineIndex = lines.findIndex(line =>
-          line.toLowerCase().startsWith("subject:")
-        );
-        // Find line starting with "body:"
-        const bodyLineIndex = lines.findIndex(line =>
-          line.toLowerCase().startsWith("body:")
-        );
-    
-        if (subjectLineIndex !== -1) {
-          subject = lines[subjectLineIndex].substring(8).trim();
-        }
-    
-        if (bodyLineIndex !== -1) {
-          bodyLines = lines.slice(bodyLineIndex + 1);
-        } else if (subjectLineIndex !== -1) {
-          bodyLines = lines.slice(subjectLineIndex + 1);
-        } else {
-          bodyLines = lines;
-        }
-      }
-    
-      // Join body lines back into a single string
-      const body = bodyLines.join("\n").trim();
-    
-      setEmailSubject(subject);
-      setEmailBody(body);
-    
-      // Mark files as processed — show subject/body fields and hide uploaders
+      await validateCSVContent(csvFile);
+    } catch (error) {
+      setCsvError(error.message);
+      return;
+    }
+    try {
+      const template = await validateTemplateContent(templateFile);
+      setEmailSubject(template.subject);
+      setEmailBody(template.body);
+      setisHtml(template.isHtml);
       setFilesProcessed(true);
-    } catch (err) {
-      // If error is from CSV validation
-      if (err.message.includes("CSV")) {
-        setCsvError(err.message);
-      } else {
-        setTemplateError(err.message);
-      }
+    } catch (error) {
+      setTemplateError(error.message);
     }
   };
 
   // Reset all to upload files again
   const handleReset = () => {
+    if (sending) return;
+    reset();
+    setisHtml(false);
     setCsvFile(null);
     setTemplateFile(null);
     setCsvError("");
@@ -219,7 +112,6 @@ export default function EmailForm() {
     setEmailSubject("");
     setEmailBody("");
     setFilesProcessed(false);
-    setLogs([]);
 
     // Clear file input values so user can upload the same file again
     if (csvInputRef.current) csvInputRef.current.value = "";
@@ -239,73 +131,16 @@ export default function EmailForm() {
       return;
     }
   
-    setLogs([]);
-    setSending(true);
-    abortControllerRef.current = new AbortController();
-  
-    const formData = new FormData();
-    formData.append("email", user.email);
-    formData.append("csv_file", csvFile);
-    formData.append("email_subject", emailSubject);
-    formData.append("email_body", emailBody);
-    formData.append("isHtml", isHtml ? "true" : "false");
-  
-    try {
-      const accessToken = localStorage.getItem("access_token");
-      const response = await fetch(`${backendURL}${sendEmailsEndPoint}`, {
-        method: "POST",
-        body: formData,
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-        signal: abortControllerRef.current.signal,
-      });
-  
-      if (!response.ok) {
-        const errorText = await response.text();
-        setLogs((prev) => [...prev, `Error: ${errorText}`]);
-        return;
-      }
-  
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let buffer = "";
-  
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-  
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop();
-  
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const logLine = line.replace("data: ", "").trim();
-            setLogs((prev) => [...prev, logLine]);
-          }
-        }
-      }
-    } catch (error) {
-      if (error.name === "AbortError") {
-        setLogs((logs) => [...logs, "Sending cancelled by user."]);
-      } else {
-        setLogs((logs) => [...logs, `Error: ${error.message}`]);
-      }
-    } finally {
-      setSending(false);
-      abortControllerRef.current = null;
-    }
-  };  
-
-  const handleCancelSending = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      setSending(false);
-    }
+    await send({ csvFile, subject: emailSubject, body: emailBody, isHtml: manualEntryMode ? false : isHtml, userEmail: user.email });
   };
 
-  const handleDownloadLogs = () => {
+  const handleCancelSending = cancel;
+
+  const handleDownloadLogs = async () => {
+    try {
+      const download = downloadLogs();
+      if (download) { await download; return; }
+    } catch (error) { alert(error.message); return; }
     if (logs.length === 0) return;
     const element = document.createElement("a");
     const file = new Blob([logs.join("\n")], { type: "text/plain" });
@@ -314,6 +149,7 @@ export default function EmailForm() {
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+    URL.revokeObjectURL(element.href);
   };
 
   return (
@@ -381,11 +217,11 @@ export default function EmailForm() {
                 id="csv-upload"
                 type="file"
                 accept=".csv"
-                className="hidden"
+                className="sr-only"
                 onChange={(e) => handleFileChange(e, "csv")}
                 ref={csvInputRef}
               />
-              {csvError && <p className="text-xs text-red-500">{csvError}</p>}
+              {csvError && <p role="alert" className="text-xs text-red-500">{csvError}</p>}
             </div>
           )}
 
@@ -400,7 +236,8 @@ export default function EmailForm() {
             <label className="text-sm mr-2">✏️ Compose Manually</label>
             <button
               type="button"
-              onClick={() => setManualEntryMode(!manualEntryMode)}
+              onClick={() => { if (!sending) setManualEntryMode(!manualEntryMode); }}
+              aria-pressed={manualEntryMode}
               className={`inline-flex items-center px-3 py-1 rounded-md text-sm font-medium 
                 ${manualEntryMode ? "bg-green-600 text-white" : "bg-gray-300 dark:bg-gray-700 text-black dark:text-white"} 
                 transition`}
@@ -462,11 +299,11 @@ export default function EmailForm() {
                   id="template-upload"
                   type="file"
                   accept=".txt,.html"
-                  className="hidden"
+                  className="sr-only"
                   onChange={(e) => handleFileChange(e, "template")}
                   ref={templateInputRef}
                 />
-                {templateError && <p className="text-xs text-red-500">{templateError}</p>}
+                {templateError && <p role="alert" className="text-xs text-red-500">{templateError}</p>}
               </div>
 
               <div className="flex space-x-2 mb-4">
@@ -492,7 +329,7 @@ export default function EmailForm() {
           )}
 
           {/* ✅ Manual Entry or Processed Form */}
-          {(manualEntryMode || filesProcessed) && (
+          {(manualEntryMode || filesProcessed || sending) && (
             <form onSubmit={handleSendEmails} className="space-y-4 mb-6">
               {/* Subject */}
               <div className="space-y-2">
@@ -569,7 +406,7 @@ export default function EmailForm() {
           {/* Logs Section */}
           <div className="mt-8 bg-gray-50 dark:bg-gray-900 rounded-md p-4 max-h-64 overflow-auto">
             <h2 className="text-lg font-semibold mb-2">Logs</h2>
-            <div className="text-xs font-mono whitespace-pre-wrap">
+            <div className="text-xs font-mono whitespace-pre-wrap" role="log" aria-live="polite" aria-relevant="additions">
               {logs.length === 0 ? (
                 <p className="text-gray-400 italic">No logs yet.</p>
               ) : (
