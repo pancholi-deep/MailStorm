@@ -1,4 +1,5 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
+import AiAssist from './AiAssist';
 import FileUpload from '../FileUpload';
 import ComposerSection from './ComposerSection';
 import { isFieldName } from '../../utils/personalization';
@@ -24,7 +25,9 @@ export default function MessageSection({
   setIsHtml,
   personalization,
   openFields,
+  aiSessionKey,
 }) {
+  const [aiOpen, setAiOpen] = useState(false);
   const subjectRef = useRef(null);
   const bodyRef = useRef(null);
   const activeInput = useRef('body');
@@ -50,19 +53,31 @@ export default function MessageSection({
       description="Make every email feel personal."
       summary={`${emailSubject.trim() || 'No subject yet'} · ${isHtml ? 'HTML' : 'Plain text'}`}
       actions={
-        <button
-          type="button"
-          className="ws-button import-toggle"
-          disabled={editorBusy}
-          aria-expanded={showTemplateImport}
-          aria-controls="template-import"
-          onClick={() => {
-            setShowTemplateImport(!showTemplateImport);
-            setTemplateError('');
-          }}
-        >
-          {showTemplateImport ? 'Close import' : 'Import template'}
-        </button>
+        <>
+          <button
+            type="button"
+            className="ws-button secondary"
+            disabled={editorBusy}
+            aria-expanded={aiOpen}
+            aria-controls="ai-assist-panel"
+            onClick={() => setAiOpen(!aiOpen)}
+          >
+            {aiOpen ? 'Close AI Assist' : 'AI Assist'}
+          </button>
+          <button
+            type="button"
+            className="ws-button import-toggle"
+            disabled={editorBusy}
+            aria-expanded={showTemplateImport}
+            aria-controls="template-import"
+            onClick={() => {
+              setShowTemplateImport(!showTemplateImport);
+              setTemplateError('');
+            }}
+          >
+            {showTemplateImport ? 'Close import' : 'Import template'}
+          </button>
+        </>
       }
       notice={
         <>
@@ -89,6 +104,30 @@ export default function MessageSection({
         </>
       }
     >
+      {aiOpen && (
+        <AiAssist
+          key={aiSessionKey}
+          subject={emailSubject}
+          body={emailBody}
+          isHtml={isHtml}
+          fields={[
+            ...new Set([
+              ...insertable,
+              ...Object.keys(personalization.fieldMapping).filter((key) =>
+                personalization.fieldInfo?.columns.includes(personalization.fieldMapping[key])
+              ),
+            ]),
+          ]
+            .filter((key) => key.length <= 64)
+            .slice(0, 64)}
+          disabled={editorBusy}
+          onApply={(suggestion) => {
+            setEmailSubject(suggestion.subject);
+            setEmailBody(suggestion.body);
+            setIsHtml(suggestion.is_html);
+          }}
+        />
+      )}
       {(showTemplateImport || templateFile) && (
         <div id="template-import" className="template-import">
           <FileUpload

@@ -64,6 +64,18 @@ class Settings(BaseModel):
     max_uploads: int = Field(default=8, ge=1)
     upload_timeout: float = Field(default=120, gt=0)
     max_body_bytes: int = Field(default=4000000, gt=0)
+    gemini_api_key: str = Field(default=os.getenv("GEMINI_API_KEY", ""), repr=False)
+    gemini_model: str = Field(
+        default=os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"), pattern=r"^[a-zA-Z0-9.-]+$"
+    )
+    ai_user_daily_limit: int = Field(default=int(os.getenv("AI_USER_DAILY_LIMIT", "20")), ge=1)
+    gemini_review_model: str = Field(
+        default=os.getenv("GEMINI_REVIEW_MODEL", "gemini-3.1-flash-lite"),
+        pattern=r"^[a-zA-Z0-9.-]+$",
+    )
+    ai_project_daily_limit: int = Field(
+        default=int(os.getenv("AI_PROJECT_DAILY_LIMIT", "100")), ge=1
+    )
 
     @property
     def allowed_origins(self):

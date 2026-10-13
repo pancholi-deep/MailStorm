@@ -9,6 +9,7 @@ from backend.jobs.database import (
     accounts,
     authorizations,
     saved_campaigns,
+    ai_usage,
 )
 from backend.jobs.state import TERMINAL
 
@@ -20,6 +21,7 @@ class RetentionRepository:
     def cleanup(self):
         with self.database.transaction() as db:
             now = self.database.now(db)
+            db.execute(delete(ai_usage).where(ai_usage.c.day < int(now // 86400)))
             db.execute(
                 delete(sessions).where(
                     sessions.c.hash.in_(

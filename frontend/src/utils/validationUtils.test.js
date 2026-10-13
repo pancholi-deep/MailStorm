@@ -1,11 +1,15 @@
-import { validateCSVContent, validateTemplateContent } from './validationUtils';
+import { inspectCSVContent, validateTemplateContent } from './validationUtils';
 import { parseTemplate } from './templateUtils';
 
-const csv = (text) => validateCSVContent({ size: text.length }, async () => text);
+const csv = (text) => inspectCSVContent(new File([text], 'contacts.csv'));
 
 test('accepts quoted commas, escaped quotes, BOM, CRLF, and normalized headers', async () => {
   await expect(csv('\uFEFF Name , EMAIL\r\n"Doe, ""Jane""",jane@example.org\r\n')).resolves.toEqual(
-    [{ name: 'Doe, "Jane"', email: 'jane@example.org' }]
+    {
+      columns: ['name', 'email'],
+      sample: { name: 'Doe, "Jane"', email: 'jane@example.org' },
+      recipient_count: 1,
+    }
   );
 });
 
@@ -30,7 +34,7 @@ test('template parser preserves inline body text and resets HTML format', () => 
 
 test('HTML fragments preserve markup and need not include a full HTML document', async () => {
   await expect(
-    validateTemplateContent({ name: 'mail.html' }, async () => '<p>Hi {name}</p>')
+    validateTemplateContent(new File(['<p>Hi {name}</p>'], 'mail.html'))
   ).resolves.toEqual({ subject: '', body: '<p>Hi {name}</p>', isHtml: true });
 });
 

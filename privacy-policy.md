@@ -1,7 +1,7 @@
 <!-- Generated from frontend/src/privacyPolicy.json. Run npm run sync:privacy in frontend. -->
 # Privacy Policy
 
-**Last updated: October 13, 2026**
+**Last updated: October 14, 2026**
 
 MailStorm (referred to as “we”, “us”, or “our”) respects your privacy. This Privacy Policy describes how we collect, use, and protect your information when you use our application.
 
@@ -17,7 +17,7 @@ MailStorm (referred to as “we”, “us”, or “our”) respects your privac
 
 ## Data Sharing and Disclosure
 
-We do not sell or rent your personal information or Google account data. Recipient addresses and message content are sent to Google to deliver your emails.
+We do not sell or rent your personal information or Google account data. Recipient addresses and message content are sent to Google to deliver your emails. Optional AI Assist sends your brief and placeholder names (for drafting), or your subject and email text (for rewriting), to Google Gemini only when you choose Generate. CSV rows and account credentials are not included automatically. Do not include personal, sensitive, or confidential information in AI input. Google’s unpaid AI services may use inputs and outputs for product improvement and human review. Optional AI content review sends the saved subject, email text, and link information to Gemini when you enable it for the open campaign and after subsequent saves while it remains enabled. CSV rows and account credentials are not attached. Review results, which may quote email content, are cached in server memory for up to 15 minutes to reuse unchanged assessments; they are not persisted to the database. Opening another campaign or starting a new one resets review consent. MailStorm does not retain AI writing prompts or suggestions separately; applying and saving a suggestion stores it as ordinary campaign content. Request counts are retained temporarily to enforce usage limits.
 
 ## Data Retention and Deletion
 

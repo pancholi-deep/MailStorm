@@ -62,10 +62,7 @@ test('uploads, finalizes, and submits idempotently before observing', async () =
     size: 3,
     slice: () => ({ arrayBuffer: async () => new TextEncoder().encode('abc').buffer }),
   };
-  const form = {
-    get: (key) =>
-      ({ csv_file: file, email_subject: 'Hi', email_body: 'Body', isHtml: 'true' })[key],
-  };
+  const draft = { csvFile: file, subject: 'Hi', body: 'Body', isHtml: true };
   fetch
     .mockResolvedValueOnce(
       response({ id: 'upload', method: 'PUT', url: '/v1/uploads/upload/content' })
@@ -76,23 +73,24 @@ test('uploads, finalizes, and submits idempotently before observing', async () =
     .mockResolvedValueOnce(response({ state: 'complete', accepted: 1, failed: 0, unknown: 0 }))
     .mockResolvedValueOnce(response([]));
   const onCampaign = jest.fn();
-  await sendEmails(form, { batchId: 'key', onEvent: jest.fn(), onCampaign });
+  await sendEmails(draft, { batchId: 'key', onEvent: jest.fn(), onCampaign });
   expect(onCampaign).toHaveBeenCalledWith('job');
   expect(fetch.mock.calls[3][1].headers['Idempotency-Key']).toBe('key');
   expect(JSON.parse(fetch.mock.calls[3][1].body).is_html).toBe(true);
 });
 
 test('sending stored contacts bypasses uploads and snapshots the current editor', async () => {
-  const form = new FormData();
-  form.append('upload_id', 'existing-upload');
-  form.append('email_subject', 'Updated subject');
-  form.append('email_body', 'Updated body');
-  form.append('isHtml', 'false');
+  const draft = {
+    uploadId: 'existing-upload',
+    subject: 'Updated subject',
+    body: 'Updated body',
+    isHtml: false,
+  };
   fetch
     .mockResolvedValueOnce(response({ id: 'job', state: 'importing' }))
     .mockResolvedValueOnce(response({ state: 'complete', accepted: 1, failed: 0, unknown: 0 }))
     .mockResolvedValueOnce(response([]));
-  await sendEmails(form, { batchId: 'new-send-key', onEvent: jest.fn() });
+  await sendEmails(draft, { batchId: 'new-send-key', onEvent: jest.fn() });
   expect(fetch.mock.calls[0][0]).toMatch('/v1/campaigns');
   expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
     upload_id: 'existing-upload',

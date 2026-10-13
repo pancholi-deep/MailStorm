@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import useEmailSending from './useEmailSending';
 import { sendEmails, listCampaigns } from '../utils/emailApi';
-import { validateCSVContent } from '../utils/validationUtils';
+import { inspectCSVContent } from '../utils/validationUtils';
 import { getBatchIdentity } from '../utils/batchUtils';
 
 jest.mock('../utils/emailApi', () => ({
@@ -11,7 +11,7 @@ jest.mock('../utils/emailApi', () => ({
   observeCampaign: jest.fn(),
   downloadCampaignLogs: jest.fn(),
 }));
-jest.mock('../utils/validationUtils', () => ({ validateCSVContent: jest.fn() }));
+jest.mock('../utils/validationUtils', () => ({ inspectCSVContent: jest.fn() }));
 jest.mock('../utils/batchUtils', () => ({ getBatchIdentity: jest.fn(), forgetBatch: jest.fn() }));
 
 const input = () => ({
@@ -24,7 +24,7 @@ const input = () => ({
 
 beforeEach(() => {
   listCampaigns.mockResolvedValue([]);
-  validateCSVContent.mockResolvedValue([]);
+  inspectCSVContent.mockResolvedValue({ recipient_count: 1 });
   getBatchIdentity.mockResolvedValue({ id: 'batch-id', fingerprint: 'hash' });
 });
 

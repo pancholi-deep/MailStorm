@@ -148,7 +148,16 @@ saved_campaigns = Table(
 )
 Index("saved_campaign_owner_updated", saved_campaigns.c.owner, saved_campaigns.c.updated)
 Index("saved_campaign_upload", saved_campaigns.c.upload_id)
-SCHEMA_VERSION = 3
+# Counts only; prompts and generated suggestions are never stored here.
+ai_usage = Table(
+    "ai_usage",
+    metadata,
+    Column("scope", String(80), primary_key=True),
+    Column("day", Integer, nullable=False),
+    Column("count", Integer, nullable=False),
+    Column("next_at", Float, nullable=False),
+)
+SCHEMA_VERSION = 4
 
 
 class Database:
@@ -175,7 +184,7 @@ class Database:
                 db.exec_driver_sql("BEGIN IMMEDIATE")
             schema.create(db, checkfirst=True)
             version = db.scalar(select(schema.c.version))
-            if version not in (None, 1, 2, SCHEMA_VERSION):
+            if version not in (None, 1, 2, 3, SCHEMA_VERSION):
                 raise RuntimeError("Unsupported database schema version")
             legacy = "job_connections" in inspect(db).get_table_names()
             if legacy:

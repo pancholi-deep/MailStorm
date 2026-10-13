@@ -3,6 +3,7 @@ from starlette.concurrency import run_in_threadpool as thread
 from backend.routes.dependencies import owner, payload
 from backend.routes.schemas import NewSavedCampaign, UpdatedSavedCampaign, Revision
 from backend.utils.validation import validate_template
+from backend.services.content_review import with_content_review
 
 router = APIRouter(prefix="/v1/saved-campaigns")
 
@@ -33,27 +34,29 @@ async def listing(request: Request):
 
 @router.get("/{identifier}")
 async def detail(identifier: str, request: Request):
-    return await thread(request.app.state.store.library.get, await owner(request), identifier)
+    saved = await thread(request.app.state.store.library.get, await owner(request), identifier)
+    return await thread(with_content_review, saved)
 
 
 @router.post("", status_code=201)
 async def create(request: Request):
     user = await owner(request)
     data = await payload(request, NewSavedCampaign)
-    return await thread(
+    saved = await thread(
         request.app.state.store.library.save,
         request.app.state.objects,
         user,
         data.id.hex,
         fields(data),
     )
+    return await thread(with_content_review, saved)
 
 
 @router.put("/{identifier}")
 async def overwrite(identifier: str, request: Request):
     user = await owner(request)
     data = await payload(request, UpdatedSavedCampaign)
-    return await thread(
+    saved = await thread(
         request.app.state.store.library.save,
         request.app.state.objects,
         user,
@@ -61,6 +64,7 @@ async def overwrite(identifier: str, request: Request):
         fields(data),
         data.revision,
     )
+    return await thread(with_content_review, saved)
 
 
 @router.post("/{identifier}/delete")

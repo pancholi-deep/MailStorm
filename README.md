@@ -58,6 +58,32 @@ For an HTML template, save a `.html` file:
 
 The HTML subject comment is optional; enter a subject in the editor if the template does not provide one. Contact values inserted into HTML are treated as text. The usual message limits are 998 subject characters and 1,000,000 body characters.
 
+## Write with AI Assist
+
+When AI is enabled for your app, open **AI Assist** in the Message section. Choose **Draft from a brief**, **Shorten**, **Proofread**, or **Change tone**. Drafting starts from your brief; the other actions work on the current subject and body. You can choose a professional, friendly, or formal tone for drafting and tone changes.
+
+Review the sharing notice, confirm that your input contains no personal or confidential information, and click **Generate suggestion**. Drafting shares your brief and available placeholder names with Google Gemini; rewriting shares your subject and email text. CSV rows and account credentials are not included automatically. Google’s free AI service may use inputs and outputs for model improvement and human review; see [Google’s AI terms](https://ai.google.dev/gemini-api/terms).
+
+Review the suggested subject and body, then choose **Apply to draft** or **Discard suggestion**. Applying replaces the current subject and body without saving or sending. Save the campaign, save a copy, or continue editing as usual. Editing or switching campaigns discards suggestions so they cannot overwrite newer work.
+
+New drafts are formatted HTML emails with a heading, spaced paragraphs, and optional bullet points. Include an HTTP(S) URL in your brief if you want a call-to-action button; otherwise the draft can invite a reply. Review the rendered preview or expand **View HTML source**, then choose **Apply to draft** to use it. Preview links and external images are disabled; email apps may render styling differently.
+
+Rewrites preserve placeholders. HTML rewrites keep existing tags, links, and styles and update their text. AI accepts briefs up to 2,000 characters and rewrites of bodies up to 20,000 characters; complex HTML may exceed its text-section limit. Check generated facts and wording before sending. If AI is unavailable or reaches its allowance, manual editing, saving, and sending remain available.
+
+## Review content before sending
+
+Click **Save campaign**, **Save changes**, or **Save as new copy** to see a **Content spam-risk** percentage and suggestions for reducing content warnings. Saved campaigns also show a fresh check when reopened. Editing the subject, body, or format marks the check as outdated; save again to refresh it. Saving still saves your campaign even when the score is high.
+
+The initial score uses local checks, **not the probability that Gmail will mark an email as spam**. MailStorm adds fixed warning points for patterns such as misleading links, hidden content, repeated punctuation, or high-pressure wording. Below 25 is low, 25–49 is moderate, and 50–100 is high. These local checks do not use AI quota.
+
+For a contextual assessment, enable **Use Gemini to review this saved draft and future saves** in the review panel. Read the sharing notice first and confirm the email contains no personal or confidential information. This sends the subject, email text, and link information to Gemini, without attaching CSV rows or account credentials. Opening another campaign or starting a new one resets this choice.
+
+Saving completes immediately; Gemini reviews in the background. Its assessment includes excerpts and specific suggestions. Technical checks for unsafe links, scripts, hidden content, misleading links, and oversized HTML remain included: the displayed score is the higher of the AI assessment and the technical warning total, rather than their sum. The result is an uncalibrated content assessment, not a delivery prediction, and AI can make mistakes.
+
+Unchanged-content results may be reused for up to 15 minutes. Reviews share your AI Assist allowance and support up to 20,000 characters of text and link information. If AI times out, reaches its allowance, or cannot review the content, your campaign stays saved and local checks remain visible. **Retry AI review** lets you try again. There is no automatic paid fallback.
+
+A low score does not guarantee inbox delivery. The check uses the template before CSV personalization and cannot assess sender authentication, reputation, recipient consent, or complaints. Follow the [Gmail sender guidelines](https://support.google.com/mail/answer/81126?hl=en), use accurate sender details, and provide a working unsubscribe option for marketing or subscription emails.
+
 ## Save and reuse campaigns
 
 A campaign combines a name, contact list, subject, message body, field mappings, and plain-text or HTML choice. For example, save a **Sales pitch** campaign once, then adjust its message for each follow-up without uploading the same contacts again. Mappings are restored when you reopen a campaign and retained when you save changes or create a copy.

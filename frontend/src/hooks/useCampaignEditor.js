@@ -25,6 +25,7 @@ export default function useCampaignEditor({ sending, libraryBusy, reset }) {
   const processingLock = useRef(false);
 
   const [selectedCampaign, setSelectedCampaign] = useState(null);
+  const [aiSessionKey, setAiSessionKey] = useState(0);
   const [campaignName, setCampaignName] = useState('');
   const [contacts, setContacts] = useState(null);
   const [mapping, setMapping] = useState({});
@@ -90,32 +91,38 @@ export default function useCampaignEditor({ sending, libraryBusy, reset }) {
       )
     : Boolean(campaignName || csvFile || emailSubject || emailBody);
 
-  const clearFileInputs = () => {
+  const clearImports = () => {
+    setCsvFile(null);
+    setTemplateFile(null);
+    setImportedTemplateFile(null);
+    setCsvError('');
+    setTemplateError('');
+    setShowTemplateImport(false);
     for (const input of [csvInputRef, templateInputRef]) {
       if (input.current) input.current.value = '';
     }
   };
 
-  const loadCampaign = (saved) => {
-    reset({ forgetIdentity: false });
+  const setSavedCampaign = (saved, metadata) => {
     setSelectedCampaign(saved);
     setCampaignName(saved.name);
     setContacts({
       upload_id: saved.upload_id,
       filename: saved.filename,
       recipient_count: saved.recipient_count,
+      ...(metadata ? { columns: metadata.columns, sample: metadata.sample } : {}),
     });
-    setCsvFile(null);
-    setTemplateFile(null);
-    setImportedTemplateFile(null);
-    setCsvError('');
-    setTemplateError('');
+  };
+
+  const loadCampaign = (saved) => {
+    setAiSessionKey((value) => value + 1);
+    reset({ forgetIdentity: false });
+    setSavedCampaign(saved);
     setEmailSubject(saved.subject);
     setEmailBody(saved.body);
     setIsHtml(saved.is_html);
     setMapping(saved.field_mapping || {});
-    setShowTemplateImport(false);
-    clearFileInputs();
+    clearImports();
   };
 
   const saveCampaign = async (copy) => {
@@ -135,14 +142,7 @@ export default function useCampaignEditor({ sending, libraryBusy, reset }) {
         setCsvFile(null);
       },
     });
-    setSelectedCampaign(saved);
-    setCampaignName(saved.name);
-    setContacts({
-      upload_id: saved.upload_id,
-      filename: saved.filename,
-      recipient_count: saved.recipient_count,
-      ...(fieldInfo ? { columns: fieldInfo.columns, sample: fieldInfo.sample } : {}),
-    });
+    setSavedCampaign(saved, fieldInfo);
     return saved;
   };
 
@@ -209,24 +209,17 @@ export default function useCampaignEditor({ sending, libraryBusy, reset }) {
 
   // Reset all to upload files again
   const resetEditor = () => {
+    setAiSessionKey((value) => value + 1);
     setSelectedCampaign(null);
     setCampaignName('');
     setContacts(null);
     setMapping({});
     saveIdentity.current = null;
-    setShowTemplateImport(false);
     reset();
     setIsHtml(false);
-    setCsvFile(null);
-    setTemplateFile(null);
-    setImportedTemplateFile(null);
-    setCsvError('');
-    setTemplateError('');
     setEmailSubject('');
     setEmailBody('');
-
-    // Clear file input values so user can upload the same file again
-    clearFileInputs();
+    clearImports();
   };
 
   const handleReset = () => {
@@ -262,6 +255,7 @@ export default function useCampaignEditor({ sending, libraryBusy, reset }) {
       handleFileDrop,
     },
     message: {
+      aiSessionKey,
       templateFile,
       importedTemplateFile,
       showTemplateImport,

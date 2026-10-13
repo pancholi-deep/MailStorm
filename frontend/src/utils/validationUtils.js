@@ -1,5 +1,4 @@
 import Papa from 'papaparse';
-import { readFileAsText } from './fileUtils';
 import { parseTemplate } from './templateUtils';
 
 const EMAIL_PATTERN =
@@ -7,12 +6,11 @@ const EMAIL_PATTERN =
 const MAX_CSV_BYTES = Number(process.env.REACT_APP_MAX_CSV_BYTES || 2097152);
 const MAX_RECIPIENTS = Number(process.env.REACT_APP_MAX_RECIPIENTS || 500);
 
-export async function inspectCSVContent(file, readerFn = readFileAsText) {
+export async function inspectCSVContent(file) {
   if (file.size > MAX_CSV_BYTES)
     throw new Error(`CSV exceeds the ${MAX_CSV_BYTES}-byte upload limit`);
   let headers;
   let count = 0;
-  const recipients = [];
   let sample;
   const consume = (data, errors = []) => {
     if (errors.length) throw new Error('CSV contains malformed quoted fields');
@@ -56,41 +54,36 @@ export async function inspectCSVContent(file, readerFn = readFileAsText) {
     }
     if (++count > MAX_RECIPIENTS)
       throw new Error(`CSV must contain at most ${MAX_RECIPIENTS} recipients`);
-    if (recipients.length < 500) recipients.push({ name, email });
     if (!sample)
       sample = Object.fromEntries(headers.map((header, index) => [header, values[index]]));
   };
-  if (readerFn !== readFileAsText) {
-    const parsed = Papa.parse(await readerFn(file), { delimiter: ',' });
-    if (parsed.errors.length) throw new Error('CSV contains malformed quoted fields');
-    parsed.data.forEach((row) => consume(row));
-  } else {
-    await new Promise((resolve, reject) => {
-      Papa.parse(file, {
-        delimiter: ',',
-        chunkSize: 262144,
-        step: (result, parser) => {
-          try {
-            consume(result.data, result.errors);
-          } catch (error) {
-            reject(error);
-            parser.abort();
-          }
-        },
-        complete: resolve,
-        error: reject,
-      });
+  await new Promise((resolve, reject) => {
+    Papa.parse(file, {
+      delimiter: ',',
+      chunkSize: 262144,
+      step: (result, parser) => {
+        try {
+          consume(result.data, result.errors);
+        } catch (error) {
+          reject(error);
+          parser.abort();
+        }
+      },
+      complete: resolve,
+      error: reject,
     });
-  }
+  });
   if (!count) throw new Error('CSV must contain at least one recipient');
-  return { recipients, columns: headers, sample, recipient_count: count };
+  return { columns: headers, sample, recipient_count: count };
 }
 
-export async function validateCSVContent(file, readerFn = readFileAsText) {
-  return (await inspectCSVContent(file, readerFn)).recipients;
-}
-
-export async function validateTemplateContent(file, readerFn = readFileAsText) {
+export async function validateTemplateContent(file) {
   if (file.size > 2097152) throw new Error('Template exceeds the 2 MB upload limit');
-  return parseTemplate(await readerFn(file), file.name);
+  const text = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => resolve(event.target.result);
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
+  return parseTemplate(text, file.name);
 }

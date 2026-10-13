@@ -1,0 +1,129 @@
+.content-risk {
+  padding: 20px;
+  margin: 0 0 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--subtle);
+  --risk-color: var(--blue);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.content-risk.moderate {
+  --risk-color: #ad6500;
+}
+.content-risk.high {
+  --risk-color: #d34040;
+}
+.workspace-dark .content-risk.moderate {
+  --risk-color: #efb65d;
+}
+.workspace-dark .content-risk.high {
+  --risk-color: #ff9494;
+}
+.content-risk-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.content-risk h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.content-risk p {
+  margin: 6px 0 12px;
+}
+.content-risk-score {
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--risk-color);
+}
+.content-risk-score strong {
+  display: block;
+  font-size: 26px;
+  line-height: 1.2;
+}
+.content-risk-score span {
+  text-transform: capitalize;
+  font-size: 12px;
+}
+.content-risk.is-stale .content-risk-score strong {
+  font-size: 16px;
+}
+.content-risk meter {
+  width: 100%;
+  height: 10px;
+  display: block;
+  margin: 4px 0 18px;
+}
+.content-risk meter::-webkit-meter-bar {
+  background: var(--line);
+  border: 0;
+}
+.content-risk meter::-webkit-meter-optimum-value {
+  background: var(--risk-color);
+}
+.content-risk meter::-moz-meter-bar {
+  background: var(--risk-color);
+}
+.content-risk-findings {
+  padding-left: 20px;
+}
+.content-risk-findings li {
+  margin: 12px 0;
+}
+.content-risk-findings strong span {
+  font-weight: 400;
+  white-space: nowrap;
+}
+.content-risk details {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.content-risk summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.content-risk a {
+  color: var(--blue);
+  text-decoration: underline;
+}
+.content-review-ai {
+  margin: 16px 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.content-review-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 600;
+}
+.content-review-consent input {
+  margin-top: 5px;
+  flex-shrink: 0;
+  accent-color: var(--blue);
+}
+.content-review-ai .muted {
+  font-size: 12px;
+}
+.content-risk blockquote {
+  margin: 8px 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--line);
+  font-style: italic;
+}
+@media (max-width: 600px) {
+  .content-risk {
+    padding: 14px;
+  }
+  .content-risk-heading {
+    flex-direction: column;
+    gap: 0;
+  }
+  .content-risk-score {
+    text-align: left;
+    margin-bottom: 12px;
+  }
+}

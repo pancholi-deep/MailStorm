@@ -85,19 +85,23 @@ class CampaignRepository:
             )
             return identifier
 
-    def status(self, owner, identifier):
-        with self.database.engine.connect() as db:
-            row = (
-                db.execute(
-                    select(*STATE_COLUMNS).where(
-                        campaigns.c.id == identifier, campaigns.c.owner == owner
-                    )
+    def row(self, db, owner, identifier):
+        row = (
+            db.execute(
+                select(*STATE_COLUMNS).where(
+                    campaigns.c.id == identifier, campaigns.c.owner == owner
                 )
-                .mappings()
-                .first()
             )
+            .mappings()
+            .first()
+        )
         if not row:
             raise HTTPException(404, "Campaign not found")
+        return row
+
+    def status(self, owner, identifier):
+        with self.database.engine.connect() as db:
+            row = self.row(db, owner, identifier)
         return {key: row[key] for key in STATUS_FIELDS}
 
     def list_campaigns(self, owner):
@@ -140,17 +144,7 @@ class CampaignRepository:
 
     def cancel(self, owner, identifier):
         with self.database.transaction() as db:
-            row = (
-                db.execute(
-                    select(*STATE_COLUMNS).where(
-                        campaigns.c.id == identifier, campaigns.c.owner == owner
-                    )
-                )
-                .mappings()
-                .first()
-            )
-            if not row:
-                raise HTTPException(404, "Campaign not found")
+            row = self.row(db, owner, identifier)
             if row["state"] != "complete":
                 now = self.database.now(db)
                 db.execute(
@@ -165,17 +159,7 @@ class CampaignRepository:
 
     def retry(self, owner, identifier):
         with self.database.transaction() as db:
-            row = (
-                db.execute(
-                    select(*STATE_COLUMNS).where(
-                        campaigns.c.id == identifier, campaigns.c.owner == owner
-                    )
-                )
-                .mappings()
-                .first()
-            )
-            if not row:
-                raise HTTPException(404, "Campaign not found")
+            row = self.row(db, owner, identifier)
             now = self.database.now(db)
             if row["state"] == "invalid":
                 raise HTTPException(409, "Correct the file and create a new campaign")

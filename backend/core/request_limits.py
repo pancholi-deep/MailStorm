@@ -18,6 +18,8 @@ class RequestBodyLimit:
         path = scope["path"]
         if path.endswith("/content") or path == "/send-emails":
             limit = settings.max_csv_bytes + settings.max_body_bytes + 131072
+        elif path == "/v1/ai/assist":
+            limit = 196608  # Bounded template/brief, allowing JSON Unicode escapes.
         elif path == "/v1/campaigns" or path.startswith("/v1/saved-campaigns"):
             limit = (
                 settings.max_body_bytes * 2 + 16384

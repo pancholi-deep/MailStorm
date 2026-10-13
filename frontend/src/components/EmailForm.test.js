@@ -74,7 +74,7 @@ test('HTML followed by Reset and TXT preserves the current workflow and sends pl
   await waitFor(() => expect(screen.getByRole('button', { name: 'Send Emails' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: 'Send Emails' }));
   await waitFor(() => expect(sendEmails).toHaveBeenCalledTimes(1));
-  expect(sendEmails.mock.calls[0][0].get('isHtml')).toBe('false');
+  expect(sendEmails.mock.calls[0][0].isHtml).toBe(false);
   expect(screen.getByRole('log')).toHaveTextContent('Finished sending emails.');
 });
 
@@ -214,7 +214,7 @@ test('maps a custom placeholder, previews escaped HTML, and sends the mapping', 
   expect(screen.getByText('Hi Alice')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Send Emails' }));
   await waitFor(() => expect(sendEmails).toHaveBeenCalledTimes(1));
-  expect(JSON.parse(sendEmails.mock.calls[0][0].get('field_mapping'))).toEqual({
+  expect(sendEmails.mock.calls[0][0].fieldMapping).toEqual({
     company: 'company name',
   });
 });

@@ -20,6 +20,7 @@ def configured(monkeypatch, tmp_path):
         "encryption_key": "",
         "s3_bucket": "",
         "environment": "development",
+        "gemini_api_key": "",
     }.items():
         monkeypatch.setattr(settings, key, value)
     monkeypatch.delenv("CORS_ORIGINS", raising=False)

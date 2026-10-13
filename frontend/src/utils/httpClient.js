@@ -2,6 +2,7 @@ import { backendURL } from './config';
 import { getAccessToken } from './session';
 
 export async function request(path, options = {}) {
+  const { timeoutMs, ...fetchOptions } = options;
   const token = getAccessToken();
   if (!token)
     throw Object.assign(new Error('Your session has expired. Please sign in again.'), {
@@ -17,12 +18,12 @@ export async function request(path, options = {}) {
       timedOut = true;
       controller.abort();
     },
-    options.method === 'PUT' ? 120000 : 45000
+    timeoutMs ?? (options.method === 'PUT' ? 120000 : 45000)
   );
   let response;
   try {
     response = await fetch(`${backendURL}${path}`, {
-      ...options,
+      ...fetchOptions,
       signal: controller.signal,
       headers: { Authorization: `Bearer ${token}`, ...options.headers },
     });

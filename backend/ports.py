@@ -31,6 +31,13 @@ class SendError(Exception):
         self.project_limit = project_limit
 
 
+class AssistError(Exception):
+    def __init__(self, message, status=502, code="ai_invalid_response"):
+        super().__init__(message)
+        self.status = status
+        self.code = code
+
+
 class MessageProvider(Protocol):
     async def refresh(self, connection: dict) -> bool:
         """Update credentials in place and report whether persistence is needed."""

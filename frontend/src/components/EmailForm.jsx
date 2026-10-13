@@ -10,6 +10,7 @@ import CampaignLibrary from './CampaignLibrary';
 import WorkspaceHeader from './campaign/WorkspaceHeader';
 import RecipientsSection from './campaign/RecipientsSection';
 import MessageSection from './campaign/MessageSection';
+import SavedContentReview from './campaign/SavedContentReview';
 import PersonalizationPanel from './campaign/PersonalizationPanel';
 import SendBar from './campaign/SendBar';
 import SendActivity from './campaign/SendActivity';
@@ -134,6 +135,16 @@ export default function EmailForm() {
           />
         }
       >
+        <SavedContentReview
+          key={editor.message.aiSessionKey}
+          saved={editor.selectedCampaign}
+          stale={Boolean(
+            editor.selectedCampaign &&
+              (editor.emailSubject !== editor.selectedCampaign.subject ||
+                editor.emailBody !== editor.selectedCampaign.body ||
+                editor.isHtml !== editor.selectedCampaign.is_html)
+          )}
+        />
         <form onSubmit={handleSendEmails}>
           <RecipientsSection {...editor.recipients} />
           <MessageSection {...editor.message} openFields={openFields} />

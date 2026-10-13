@@ -12,6 +12,15 @@ jest.mock('../utils/gmailApi', () => ({
   getGmailStatus: jest.fn(async () => ({ connected: true, revocation_pending: false })),
   disconnectGmail: jest.fn(),
 }));
+jest.mock('../utils/aiApi', () => ({
+  reviewSavedCampaign: jest.fn(),
+  getAiStatus: jest.fn(async () => ({ available: true })),
+  generateEmailSuggestion: jest.fn(async () => ({
+    subject: 'An update',
+    body: '<h1>Hello {name}</h1><p>An update.</p>',
+    is_html: true,
+  })),
+}));
 jest.mock('../utils/uploadApi', () => ({
   uploadContacts: jest.fn(),
   inspectUploadedContacts: jest.fn(),
@@ -50,6 +59,12 @@ const sales = {
 };
 
 beforeEach(() => {
+  require('../utils/aiApi').getAiStatus.mockResolvedValue({ available: true });
+  require('../utils/aiApi').generateEmailSuggestion.mockResolvedValue({
+    subject: 'An update',
+    body: '<h1>Hello {name}</h1><p>An update.</p>',
+    is_html: true,
+  });
   require('../utils/gmailApi').getGmailStatus.mockResolvedValue({
     connected: true,
     revocation_pending: false,
@@ -101,6 +116,76 @@ async function openSales() {
   await screen.findByRole('button', { name: 'Insert {name}' });
 }
 
+test('saving shows the server review and edits require a fresh check', async () => {
+  api.overwriteSavedCampaign.mockImplementation(async (id, data) => ({
+    ...data,
+    id,
+    revision: data.revision + 1,
+    recipient_count: 2,
+    content_review: { score: 0, level: 'low', findings: [] },
+  }));
+  renderForm();
+  await openSales();
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  await screen.findByText('0%');
+  fireEvent.change(screen.getByLabelText('Email Subject'), { target: { value: 'A new subject' } });
+  expect(screen.queryByText('0%')).not.toBeInTheDocument();
+  expect(screen.getByText(/Draft changed. Save again/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  await screen.findByText('0%');
+  expect(screen.queryByText(/Draft changed. Save again/)).not.toBeInTheDocument();
+  expect(sendEmails).not.toHaveBeenCalled();
+});
+
+test('save completes and editor stays available while the consented AI review is pending', async () => {
+  const reviewSavedCampaign = require('../utils/aiApi').reviewSavedCampaign;
+  reviewSavedCampaign.mockImplementation(() => new Promise(() => {}));
+  const content_review = { score: 0, level: 'low', findings: [] };
+  api.loadSavedCampaign.mockResolvedValue({ ...sales, content_review });
+  api.overwriteSavedCampaign.mockImplementation(async (id, data) => ({
+    ...data,
+    id,
+    revision: data.revision + 1,
+    recipient_count: 2,
+    content_review,
+  }));
+  renderForm();
+  await openSales();
+  fireEvent.click(screen.getByLabelText(/Use Gemini to review this saved draft/));
+  expect(reviewSavedCampaign).toHaveBeenCalledTimes(1);
+  fireEvent.change(screen.getByLabelText('Email Subject'), {
+    target: { value: 'An updated subject' },
+  });
+  expect(reviewSavedCampaign.mock.calls[0][1].aborted).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  await screen.findByText('Campaign saved.');
+  await screen.findByText(/Gemini is reviewing/);
+  expect(screen.getByLabelText('Email Body')).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+  expect(reviewSavedCampaign.mock.calls[1][0].revision).toBe(2);
+  expect(sendEmails).not.toHaveBeenCalled();
+});
+
+test('applying an HTML suggestion switches the editor format without saving or sending', async () => {
+  renderForm();
+  await openSales();
+  fireEvent.click(screen.getByLabelText('Email body contains HTML'));
+  expect(screen.getByLabelText('Email body contains HTML')).not.toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'AI Assist' }));
+  await screen.findByLabelText('Writing task');
+  fireEvent.change(screen.getByLabelText('Writing task'), { target: { value: 'draft' } });
+  fireEvent.change(screen.getByLabelText(/What should the email say/), {
+    target: { value: 'Write a product update for {name}.' },
+  });
+  fireEvent.click(screen.getByLabelText(/I’m only sharing nonconfidential/));
+  fireEvent.click(screen.getByRole('button', { name: 'Generate suggestion' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Apply to draft' }));
+  expect(screen.getByLabelText('Email body contains HTML')).toBeChecked();
+  expect(screen.getByLabelText('Email Body')).toHaveValue('<h1>Hello {name}</h1><p>An update.</p>');
+  expect(api.overwriteSavedCampaign).not.toHaveBeenCalled();
+  expect(sendEmails).not.toHaveBeenCalled();
+});
+
 test('reopens saved content and sends edits without reuploading or autosaving', async () => {
   renderForm();
   await openSales();
@@ -111,9 +196,9 @@ test('reopens saved content and sends edits without reuploading or autosaving', 
   fireEvent.click(screen.getByRole('button', { name: 'Send Emails' }));
   await waitFor(() => expect(sendEmails).toHaveBeenCalledTimes(1));
   const data = sendEmails.mock.calls[0][0];
-  expect(data.get('upload_id')).toBe('stored-contacts');
-  expect(data.get('email_body')).toBe('<p>A revised pitch</p>');
-  expect(data.get('isHtml')).toBe('true');
+  expect(data.uploadId).toBe('stored-contacts');
+  expect(data.body).toBe('<p>A revised pitch</p>');
+  expect(data.isHtml).toBe(true);
   expect(uploadContacts).not.toHaveBeenCalled();
   expect(api.overwriteSavedCampaign).not.toHaveBeenCalled();
 });

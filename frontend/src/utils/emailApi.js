@@ -63,19 +63,19 @@ export async function observeCampaign(id, { signal, onEvent }) {
   }
 }
 
-export async function sendEmails(formData, { signal, batchId, onEvent, onCampaign = () => {} }) {
-  const uploadId =
-    formData.get('upload_id') || (await uploadContacts(formData.get('csv_file'), signal));
+export async function sendEmails(
+  { csvFile, uploadId, subject, body, isHtml = false, fieldMapping },
+  { signal, batchId, onEvent, onCampaign = () => {} }
+) {
+  const contacts = uploadId || (await uploadContacts(csvFile, signal));
   // Once creation starts, receive its durable ID before processing a cancellation.
   const job = await jsonRequest('/v1/campaigns', {
     ...jsonBody({
-      upload_id: uploadId,
-      subject: formData.get('email_subject'),
-      body: formData.get('email_body'),
-      is_html: formData.get('isHtml') === 'true',
-      ...(formData.get('field_mapping')
-        ? { field_mapping: JSON.parse(formData.get('field_mapping')) }
-        : {}),
+      upload_id: contacts,
+      subject,
+      body,
+      is_html: isHtml,
+      field_mapping: fieldMapping,
     }),
     headers: { 'Content-Type': 'application/json', 'Idempotency-Key': batchId },
   });

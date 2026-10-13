@@ -3,7 +3,7 @@ import { inspectCSVContent } from './validationUtils';
 
 test('inspects all CSV headers and preserves complete sample values', async () => {
   const text = '\uFEFFName,EMAIL, Company Name ,notes\nAlice Smith,a@example.org,"Acme, Inc.",';
-  const result = await inspectCSVContent({ size: text.length }, async () => text);
+  const result = await inspectCSVContent(new File([text], 'contacts.csv'));
   expect(result.columns).toEqual(['name', 'email', 'company name', 'notes']);
   expect(result.sample).toEqual({
     name: 'Alice Smith',

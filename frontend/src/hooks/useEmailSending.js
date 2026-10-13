@@ -6,7 +6,7 @@ import {
   observeCampaign,
   downloadCampaignLogs,
 } from '../utils/emailApi';
-import { validateCSVContent } from '../utils/validationUtils';
+import { inspectCSVContent } from '../utils/validationUtils';
 import {
   forgetBatch,
   getBatchIdentity,
@@ -90,7 +90,7 @@ export default function useEmailSending(logout) {
     setLogs([]);
     let expired = false;
     try {
-      if (!uploadId) await validateCSVContent(csvFile);
+      if (!uploadId) await inspectCSVContent(csvFile);
       if (controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
       const signatureValues = [subject, body, isHtml, userEmail];
       if (savedCampaignId) signatureValues.push(savedCampaignId);
@@ -113,13 +113,7 @@ export default function useEmailSending(logout) {
         };
       }
       if (controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
-      const data = new FormData();
-      if (uploadId) data.append('upload_id', uploadId);
-      else data.append('csv_file', csvFile);
-      data.append('email_subject', subject);
-      data.append('email_body', body);
-      data.append('isHtml', String(isHtml));
-      data.append('field_mapping', JSON.stringify(fieldMapping));
+      const data = { csvFile, uploadId, subject, body, isHtml, fieldMapping };
       const result = await sendEmails(data, {
         signal: controller.signal,
         batchId: batchRef.current.id,

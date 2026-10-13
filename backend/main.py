@@ -14,6 +14,8 @@ from backend.core.config import settings
 from backend.core.request_limits import RequestBodyLimit
 from backend.routes.auth_routes import router as auth_router
 from backend.routes.email_routes import router as email_router
+from backend.routes.ai_routes import router as ai_router
+from backend.services.review_cache import ReviewCache
 
 
 @asynccontextmanager
@@ -21,6 +23,7 @@ async def lifespan(app):
     settings.validate_startup()
     async with httpx.AsyncClient(timeout=settings.http_timeout) as client:
         app.state.http_client = client
+        app.state.review_cache = ReviewCache()
         app.state.store = await run_in_threadpool(Store)
         if settings.environment != "production":
             await run_in_threadpool(app.state.store.database.migrate)
@@ -36,6 +39,7 @@ async def lifespan(app):
             yield
         finally:
             stop.set()
+            await app.state.review_cache.close()
             if worker:
                 await worker
             app.state.store.database.engine.dispose()
@@ -63,6 +67,7 @@ app.include_router(email_router)
 app.include_router(upload_router)
 app.include_router(campaign_router)
 app.include_router(library_router)
+app.include_router(ai_router)
 
 
 @app.get("/readyz")
