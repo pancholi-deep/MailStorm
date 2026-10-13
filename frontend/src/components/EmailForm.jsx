@@ -2,6 +2,8 @@ import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/authContext';
 import useEmailSending from '../hooks/useEmailSending';
+import useGmailConnection from '../hooks/useGmailConnection';
+import GmailConnectionNotice from './campaign/GmailConnectionNotice';
 import useCampaignEditor from '../hooks/useCampaignEditor';
 import CampaignLibrary from './CampaignLibrary';
 import WorkspaceHeader from './campaign/WorkspaceHeader';
@@ -18,8 +20,9 @@ export default function EmailForm() {
   const { user, logout } = useContext(AuthContext);
   const [darkMode, setDarkMode] = useState(false);
   const [libraryBusy, setLibraryBusy] = useState(false);
+  const gmail = useGmailConnection();
   const { logs, sending, send, cancel, reset, downloadLogs } = useEmailSending(logout);
-  const editor = useCampaignEditor({ sending, libraryBusy, reset });
+  const editor = useCampaignEditor({ sending, libraryBusy: libraryBusy || gmail.busy, reset });
 
   const handleLogout = async () => {
     await cancel();
@@ -27,9 +30,30 @@ export default function EmailForm() {
     navigate(loginPath);
   };
 
+  const handleDisconnect = async () => {
+    if (
+      !window.confirm(
+        'Disconnect Gmail? Pending sends will stop and stored Gmail tokens will be removed. A message already in flight may finish. Your saved campaigns and current draft will stay.'
+      )
+    )
+      return;
+    if (await gmail.disconnect()) await cancel();
+  };
+
+  const handleReconnect = () => {
+    if (
+      editor.dirty &&
+      !window.confirm(
+        'Sign in again to reconnect Gmail? Unsaved edits will be lost. Cancel to save your campaign first.'
+      )
+    )
+      return;
+    handleLogout();
+  };
+
   const handleSendEmails = async (e) => {
     e.preventDefault();
-    if (editor.editorBusy) return;
+    if (editor.editorBusy || !gmail.status?.connected) return;
 
     if (!editor.csvFile && !editor.contacts) {
       alert('Please upload a CSV file.');
@@ -68,9 +92,14 @@ export default function EmailForm() {
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         handleLogout={handleLogout}
-        libraryBusy={libraryBusy}
+        libraryBusy={libraryBusy || gmail.busy}
+        gmailStatus={gmail.status}
+        gmailBusy={gmail.busy}
+        handleDisconnect={handleDisconnect}
+        handleReconnect={handleReconnect}
         processing={editor.processing}
       />
+      <GmailConnectionNotice {...gmail} />
       <CampaignLibrary
         selected={editor.selectedCampaign}
         name={editor.campaignName}
@@ -89,6 +118,7 @@ export default function EmailForm() {
             user={user}
             sending={sending}
             editorBusy={editor.editorBusy}
+            gmailConnected={gmail.status?.connected === true}
             handleReset={editor.handleReset}
             handleCancelSending={cancel}
           />

@@ -827,6 +827,11 @@
 @media (max-width: 460px) {
   .workspace-topbar {
     padding: 12px 16px;
+    flex-wrap: wrap;
+  }
+  .account-actions {
+    flex-basis: 100%;
+    justify-content: flex-end;
   }
   .workspace-brand {
     font-size: 20px;
@@ -913,4 +918,23 @@
       background-color 0.15s,
       border-color 0.15s;
   }
+}
+
+.gmail-notice {
+  margin: 0 auto 1rem;
+  max-width: 1440px;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.gmail-notice p {
+  margin: 0.25rem 0;
+}
+.gmail-notice a {
+  text-decoration: underline;
+}
+.account-actions {
+  flex-wrap: wrap;
 }

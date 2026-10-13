@@ -98,8 +98,9 @@ const Login = ({ setUser, googleScriptError = false }) => {
           emails to each person.
         </p>
         <p className="mb-3">
-          Google Sign-In is used to securely send emails on your behalf through the Gmail API. Your
-          data is not stored or accessed beyond sending emails.
+          Google Sign-In is used to securely send emails on your behalf through the Gmail API. Saved
+          campaigns and delivery records are retained so you can reuse contacts and follow sending
+          progress.
         </p>
         <a
           href="/privacy"

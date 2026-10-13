@@ -6,6 +6,7 @@ import random
 import time
 import uuid
 from contextlib import suppress
+from collections.abc import Awaitable, Callable
 from starlette.concurrency import run_in_threadpool as thread
 from backend.core.config import settings
 from backend.jobs.state import LostLease
@@ -32,9 +33,11 @@ class Worker:
         retention: Retention,
         objects: RetainedObjects,
         provider: MessageProvider,
+        authorization_cleanup: Callable[[], Awaitable[None]] | None = None,
     ):
         self.queue, self.uploads, self.retention = queue, uploads, retention
         self.objects, self.provider = objects, provider
+        self.authorization_cleanup = authorization_cleanup
         self.identifier = uuid.uuid4().hex
 
     async def heartbeat(self, job):
@@ -54,14 +57,14 @@ class Worker:
                 except ValueError as exc:
                     await thread(self.queue.release, job, "invalid", str(exc))
                 return True
-            connection, version = await thread(self.queue.connection, job)
             try:
+                connection, version = await thread(self.queue.connection, job)
                 refreshed = await self.provider.refresh(connection)
+                if refreshed:
+                    await thread(self.queue.save_connection, job, connection, version)
             except AuthorizationRequired as exc:
                 await thread(self.queue.release, job, "awaiting_auth", str(exc))
                 return True
-            if refreshed:
-                await thread(self.queue.save_connection, job, connection, version)
             recipient, state, delay = await thread(self.queue.next_recipient, job)
             if recipient is None:
                 await thread(self.queue.release, job, state, None, delay)
@@ -125,6 +128,8 @@ class Worker:
             try:
                 worked = await self.run_once()
                 if time.monotonic() >= maintenance:
+                    if self.authorization_cleanup:
+                        await self.authorization_cleanup()
                     for identifier in await thread(self.retention.cleanup):
                         await thread(self.objects.delete, identifier)
                         await thread(self.retention.delete_upload_record, identifier)

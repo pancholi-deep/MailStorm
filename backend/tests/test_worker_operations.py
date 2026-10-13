@@ -2,7 +2,7 @@ import hashlib
 import httpx
 from sqlalchemy import update, select
 from backend.main import app
-from backend.jobs.database import connections, campaigns, sessions, uploads
+from backend.jobs.database import accounts, authorizations, campaigns, sessions, uploads
 from backend.core.config import settings
 from backend.tests.test_sending import create, step, drain
 
@@ -14,12 +14,16 @@ def test_refresh_token_is_server_side_and_campaign_resumes(api):
     store = app.state.store
     owner = store.sessions.authenticate(client.headers["Authorization"].removeprefix("Bearer "))
     with store.database.transaction() as db:
-        row = db.execute(select(connections).where(connections.c.owner == owner)).mappings().one()
+        row = (
+            db.execute(select(authorizations).where(authorizations.c.owner == owner))
+            .mappings()
+            .one()
+        )
         secret = store.vault.open(row["secret"])
         secret["expires_at"] = 0
         db.execute(
-            update(connections)
-            .where(connections.c.owner == owner)
+            update(authorizations)
+            .where(authorizations.c.owner == owner)
             .values(secret=store.vault.seal(secret))
         )
     refreshes = []
@@ -45,15 +49,22 @@ def test_retention_deletes_objects_before_metadata_and_idle_credentials(api):
     with store.database.transaction() as db:
         db.execute(update(campaigns).values(updated=0))
         db.execute(update(uploads).values(created=0))
-        db.execute(update(connections).values(updated=0))
+        db.execute(update(authorizations).values(updated=0))
+        db.execute(update(accounts).values(updated=0))
         db.execute(update(sessions).values(expires=0))
+    import asyncio
+    from backend.services.gmail_authorization import GmailAuthorizationService
+
+    asyncio.run(
+        GmailAuthorizationService(store.authorizations, app.state.http_client).cleanup_expired()
+    )
     orphaned = store.retention.cleanup()
     assert len(orphaned) == 1
     assert (app.state.objects.root / orphaned[0]).exists()
     app.state.objects.delete(orphaned[0])
     store.retention.delete_upload_record(orphaned[0])
     with store.database.engine.connect() as db:
-        assert db.execute(select(connections)).first() is None
+        assert db.execute(select(authorizations)).first() is None
         assert db.execute(select(uploads)).first() is None
 
 

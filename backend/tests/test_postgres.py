@@ -54,6 +54,26 @@ def test_postgres_concurrent_claim_and_fencing(configured):
         with pytest.raises(LostLease):
             store.queue.release(old)
         store.queue.release(replacement, "queued")
+        # Exercise the real legacy table rename and FK-preserving credential split on PostgreSQL.
+        from backend.tests.test_authorizations import legacy_database
+        from backend.jobs.database import accounts, authorizations
+        from sqlalchemy import select
+
+        legacy_database(store)
+        database.migrate()
+        database.verify()
+        assert store.sessions.authenticate(token) == owner
+        assert store.authorizations.status(owner)["connected"] is True
+        with database.engine.connect() as db:
+            assert "token" not in store.vault.open(db.scalar(select(accounts.c.secret)))
+            assert (
+                store.vault.open(db.scalar(select(authorizations.c.secret)))["token"]
+                == "provider-secret"
+            )
+        grant = store.authorizations.disconnect(owner)
+        store.authorizations.finish_disconnect(owner, grant["version"], True)
+        assert store.sessions.authenticate(token) == owner
+        assert store.authorizations.status(owner)["connected"] is False
     finally:
         database.engine.dispose()
         with admin.begin() as db:

@@ -70,6 +70,14 @@ Saved campaigns remain available between sessions when you sign in with the same
 
 If a campaign was changed in another tab, reopen its latest version before overwriting or deleting it. To keep your current edits separately, save a new copy.
 
+## Manage Gmail access
+
+**Sign Out** ends your MailStorm session. **Disconnect Gmail** also removes stored Gmail tokens, asks Google to revoke access, and stops pending sends. A message already in progress may finish. Your saved campaigns and current draft stay available, and you can continue editing and saving while disconnected.
+
+Choose **Reconnect Gmail** to sign in again before sending. Save any draft first; reconnecting returns you to sign-in. If Google revocation cannot be confirmed, MailStorm shows a link to remove its access in your Google account settings.
+
+Gmail access is also removed after 30 days without sign-in or sending activity, once no active sends need it. Saved campaigns remain available. Signing in again reconnects Gmail; explicitly cancelled sends do not restart automatically.
+
 ## Follow a send
 
 Sending continues if you close or reload the browser. When you return while still signed in, MailStorm reconnects to a running send. **Cancel Sending** stops further sending, although a message already in progress may finish; it cannot recall emails already sent.

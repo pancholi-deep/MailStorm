@@ -7,6 +7,10 @@ export default function WorkspaceHeader({
   handleLogout,
   libraryBusy,
   processing,
+  gmailStatus,
+  gmailBusy,
+  handleDisconnect,
+  handleReconnect,
 }) {
   return (
     <header className="workspace-topbar">
@@ -26,6 +30,20 @@ export default function WorkspaceHeader({
           aria-pressed={darkMode}
         >
           {darkMode ? '☀' : '☾'}
+        </button>
+        <button
+          type="button"
+          className="ws-button"
+          onClick={gmailStatus?.connected ? handleDisconnect : handleReconnect}
+          disabled={!gmailStatus || libraryBusy || processing || gmailBusy}
+        >
+          {gmailBusy
+            ? 'Disconnecting…'
+            : !gmailStatus
+              ? 'Checking Gmail…'
+              : gmailStatus.connected
+                ? 'Disconnect Gmail'
+                : 'Reconnect Gmail'}
         </button>
         <button
           type="button"

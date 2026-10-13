@@ -56,6 +56,9 @@ class Settings(BaseModel):
     max_attempts: int = Field(default=5, ge=1, le=20)
     max_queued_per_owner: int = Field(default=10, ge=1)
     max_queued_total: int = Field(default=1000, ge=1)
+    authorization_retention_seconds: int = Field(
+        default=int(os.getenv("AUTHORIZATION_RETENTION_SECONDS", "2592000")), ge=86400
+    )
     session_seconds: int = Field(default=604800, ge=60)
     retention_seconds: int = Field(default=int(os.getenv("RETENTION_SECONDS", "2592000")), ge=86400)
     max_uploads: int = Field(default=8, ge=1)

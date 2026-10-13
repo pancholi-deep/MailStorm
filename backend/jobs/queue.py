@@ -3,7 +3,8 @@
 import uuid
 from sqlalchemy import select, update, delete, func
 from backend.core.config import settings
-from backend.jobs.database import campaigns, recipients, attempts, connections, gate
+from backend.jobs.database import campaigns, recipients, attempts, accounts, authorizations, gate
+from backend.ports import AuthorizationRequired
 from backend.jobs.state import ACTIVE, STATE_COLUMNS, LostLease
 
 
@@ -156,11 +157,14 @@ class JobQueue:
     def connection(self, job):
         with self.database.engine.connect() as db:
             row = (
-                db.execute(select(connections).where(connections.c.owner == job["owner"]))
+                db.execute(select(authorizations).where(authorizations.c.owner == job["owner"]))
                 .mappings()
-                .one()
+                .first()
             )
-        return self.vault.open(row["secret"]), row["version"]
+            if not row:
+                raise AuthorizationRequired("Gmail is disconnected. Sign in again to reconnect.")
+            profile = db.scalar(select(accounts.c.secret).where(accounts.c.owner == job["owner"]))
+        return {**self.vault.open(profile), **self.vault.open(row["secret"])}, row["version"]
 
     def finish_import(self, job):
         with self.database.transaction() as db:
@@ -170,15 +174,21 @@ class JobQueue:
     def save_connection(self, job, secret, version):
         with self.database.transaction() as db:
             self.fenced(db, job)
-            db.execute(
-                update(connections)
-                .where(connections.c.owner == job["owner"], connections.c.version == version)
+            credentials = {key: secret.get(key) for key in ("token", "refresh_token", "expires_at")}
+            changed = db.execute(
+                update(authorizations)
+                .where(
+                    authorizations.c.owner == job["owner"],
+                    authorizations.c.version == version,
+                )
                 .values(
-                    secret=self.vault.seal(secret),
+                    secret=self.vault.seal(credentials),
                     version=version + 1,
                     updated=self.database.now(db),
                 )
-            )
+            ).rowcount
+            if not changed:
+                raise AuthorizationRequired("Gmail authorization changed. Please try again.")
 
     def next_recipient(self, job):
         with self.database.transaction() as db:
@@ -186,6 +196,10 @@ class JobQueue:
             now = self.database.now(db)
             if campaign["cancel_requested"]:
                 return None, "cancelled", 0
+            if not db.scalar(
+                select(authorizations.c.owner).where(authorizations.c.owner == job["owner"])
+            ):
+                return None, "awaiting_auth", 0
             row = (
                 db.execute(
                     select(recipients)
@@ -202,7 +216,7 @@ class JobQueue:
             if not row:
                 return None, "complete", 0
             connection = (
-                db.execute(select(connections).where(connections.c.owner == job["owner"]))
+                db.execute(select(accounts).where(accounts.c.owner == job["owner"]))
                 .mappings()
                 .one()
             )
@@ -211,12 +225,17 @@ class JobQueue:
             if wait > 0:
                 return None, "queued", wait
             db.execute(
-                update(connections)
-                .where(connections.c.owner == job["owner"])
+                update(accounts)
+                .where(accounts.c.owner == job["owner"])
                 .values(next_at=now + settings.sender_interval)
             )
             db.execute(
                 update(gate).where(gate.c.id == 1).values(next_at=now + settings.project_interval)
+            )
+            db.execute(
+                update(authorizations)
+                .where(authorizations.c.owner == job["owner"])
+                .values(updated=now)
             )
             attempt_id = uuid.uuid4().hex
             db.execute(
@@ -241,8 +260,8 @@ class JobQueue:
             self.fenced(db, job)
             until = self.database.now(db) + delay
             db.execute(
-                update(connections)
-                .where(connections.c.owner == job["owner"], connections.c.next_at < until)
+                update(accounts)
+                .where(accounts.c.owner == job["owner"], accounts.c.next_at < until)
                 .values(next_at=until)
             )
             if project:

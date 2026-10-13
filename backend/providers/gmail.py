@@ -45,3 +45,23 @@ class GmailProvider:
             is_html,
             self.client,
         )
+
+
+async def revoke_authorization(client, token):
+    """Never log tokens or provider responses; a failure is reported to the caller."""
+    import httpx
+
+    if not token:
+        return True
+    try:
+        response = await client.post(
+            "https://oauth2.googleapis.com/revoke",
+            data={"token": token},
+            timeout=10,
+        )
+        if response.status_code == 200:
+            return True
+        # Already-invalid tokens have no remaining authorization to revoke.
+        return response.status_code == 400 and response.json().get("error") == "invalid_token"
+    except (httpx.HTTPError, ValueError, AttributeError):
+        return False

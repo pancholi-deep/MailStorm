@@ -18,6 +18,7 @@ from sqlalchemy import (
     select,
     text,
     update,
+    inspect,
 )
 from backend.core.config import settings
 
@@ -29,20 +30,31 @@ gate = Table(
     Column("id", Integer, primary_key=True),
     Column("next_at", Float, nullable=False),
 )
-connections = Table(
-    "job_connections",
+accounts = Table(
+    "job_accounts",
     metadata,
     Column("owner", String(64), primary_key=True),
     Column("secret", Text, nullable=False),
     Column("version", Integer, nullable=False, default=1),
     Column("next_at", Float, nullable=False, default=0),
     Column("updated", Float, nullable=False),
+    Column("disconnect_until", Float, nullable=False, server_default="0"),
+    Column("revocation_pending", Boolean, nullable=False, server_default=text("false")),
 )
+authorizations = Table(
+    "gmail_authorizations",
+    metadata,
+    Column("owner", String(64), ForeignKey("job_accounts.owner"), primary_key=True),
+    Column("secret", Text, nullable=False),
+    Column("version", Integer, nullable=False),
+    Column("updated", Float, nullable=False),
+)
+Index("gmail_authorization_updated", authorizations.c.updated)
 sessions = Table(
     "job_sessions",
     metadata,
     Column("hash", String(64), primary_key=True),
-    Column("owner", String(64), ForeignKey("job_connections.owner"), nullable=False),
+    Column("owner", String(64), ForeignKey("job_accounts.owner"), nullable=False),
     Column("expires", Float, nullable=False),
 )
 uploads = Table(
@@ -60,7 +72,7 @@ campaigns = Table(
     "job_campaigns",
     metadata,
     Column("id", String(64), primary_key=True),
-    Column("owner", String(64), ForeignKey("job_connections.owner"), nullable=False),
+    Column("owner", String(64), ForeignKey("job_accounts.owner"), nullable=False),
     Column("key", String(64), nullable=False),
     Column("fingerprint", String(64), nullable=False),
     Column("upload_id", String(64), ForeignKey("job_uploads.id"), nullable=False),
@@ -117,7 +129,7 @@ Index("job_upload_created", uploads.c.created)
 Index("job_upload_owner_created", uploads.c.owner, uploads.c.created)
 Index("job_session_expiry", sessions.c.expires)
 Index("job_session_owner", sessions.c.owner)
-Index("job_connection_updated", connections.c.updated)
+Index("job_account_updated", accounts.c.updated)
 Index("job_campaign_retention", campaigns.c.state, campaigns.c.updated)
 
 # Reusable definitions are independent of immutable delivery jobs.
@@ -125,7 +137,7 @@ saved_campaigns = Table(
     "saved_campaigns",
     metadata,
     Column("id", String(32), primary_key=True),
-    Column("owner", String(64), ForeignKey("job_connections.owner"), nullable=False),
+    Column("owner", String(64), ForeignKey("job_accounts.owner"), nullable=False),
     Column("upload_id", String(64), ForeignKey("job_uploads.id"), nullable=False),
     Column("label", Text, nullable=False),
     Column("secret", Text, nullable=False),
@@ -136,7 +148,7 @@ saved_campaigns = Table(
 )
 Index("saved_campaign_owner_updated", saved_campaigns.c.owner, saved_campaigns.c.updated)
 Index("saved_campaign_upload", saved_campaigns.c.upload_id)
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class Database:
@@ -155,21 +167,51 @@ class Database:
         self.sqlite = self.engine.dialect.name == "sqlite"
 
     def migrate(self):
-        # Additive v1 -> v2 migration; existing jobs, checkpoints and objects stay intact.
-        # Run once before starting production processes.
-        schema.create(self.engine, checkfirst=True)
-        with self.engine.connect() as db:
-            version = db.scalar(select(schema.c.version))
-        if version not in (None, 1, SCHEMA_VERSION):
-            raise RuntimeError("Unsupported database schema version")
-        metadata.create_all(self.engine)
+        # Run with old API/workers stopped. DDL and secret splitting commit together.
+        from backend.jobs.crypto import Vault
+
         with self.engine.begin() as db:
+            if self.sqlite:
+                db.exec_driver_sql("BEGIN IMMEDIATE")
+            schema.create(db, checkfirst=True)
+            version = db.scalar(select(schema.c.version))
+            if version not in (None, 1, 2, SCHEMA_VERSION):
+                raise RuntimeError("Unsupported database schema version")
+            legacy = "job_connections" in inspect(db).get_table_names()
+            if legacy:
+                db.exec_driver_sql("ALTER TABLE job_connections RENAME TO job_accounts")
+                db.exec_driver_sql(
+                    "ALTER TABLE job_accounts ADD COLUMN disconnect_until FLOAT NOT NULL DEFAULT 0"
+                )
+                db.exec_driver_sql(
+                    "ALTER TABLE job_accounts ADD COLUMN revocation_pending BOOLEAN NOT NULL DEFAULT false"
+                )
+            metadata.create_all(db)
+            if legacy:
+                vault = Vault()
+                for row in db.execute(select(accounts)).mappings():
+                    value = vault.open(row["secret"])
+                    profile = {key: value.get(key, "") for key in ("name", "email")}
+                    credentials = {
+                        key: value.get(key) for key in ("token", "refresh_token", "expires_at")
+                    }
+                    db.execute(
+                        authorizations.insert().values(
+                            owner=row["owner"],
+                            secret=vault.seal(credentials),
+                            version=row["version"],
+                            updated=row["updated"],
+                        )
+                    )
+                    db.execute(
+                        update(accounts)
+                        .where(accounts.c.owner == row["owner"])
+                        .values(secret=vault.seal(profile))
+                    )
             if version is None:
                 db.execute(schema.insert().values(version=SCHEMA_VERSION))
-            elif version == 1:
-                db.execute(
-                    update(schema).where(schema.c.version == 1).values(version=SCHEMA_VERSION)
-                )
+            else:
+                db.execute(update(schema).values(version=SCHEMA_VERSION))
             if db.scalar(select(gate.c.id)) is None:
                 db.execute(gate.insert().values(id=1, next_at=0))
 

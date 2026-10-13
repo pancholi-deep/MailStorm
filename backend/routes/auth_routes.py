@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 from backend.core.config import settings
 from backend.utils.auth_utils import get_user_info
+from backend.services.gmail_authorization import GmailAuthorizationService
 from backend.routes.dependencies import owner, bearer_token
 
 router = APIRouter()
@@ -83,3 +84,18 @@ async def logout(request: Request):
     await owner(request)
     await run_in_threadpool(request.app.state.store.sessions.logout, bearer_token(request))
     return {"ok": True}
+
+
+@router.get("/v1/gmail")
+async def gmail_status(request: Request):
+    user = await owner(request)
+    return await run_in_threadpool(request.app.state.store.authorizations.status, user)
+
+
+@router.post("/v1/gmail/disconnect")
+async def disconnect_gmail(request: Request):
+    user = await owner(request)
+    service = GmailAuthorizationService(
+        request.app.state.store.authorizations, request.app.state.http_client
+    )
+    return await service.disconnect(user)

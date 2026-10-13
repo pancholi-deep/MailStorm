@@ -8,6 +8,10 @@ import { sendEmails, listCampaigns } from '../utils/emailApi';
 import { uploadContacts } from '../utils/uploadApi';
 import { getUploadBatchIdentity } from '../utils/batchUtils';
 
+jest.mock('../utils/gmailApi', () => ({
+  getGmailStatus: jest.fn(async () => ({ connected: true, revocation_pending: false })),
+  disconnectGmail: jest.fn(),
+}));
 jest.mock('../utils/uploadApi', () => ({ uploadContacts: jest.fn() }));
 jest.mock('../utils/campaignLibraryApi', () => ({
   listSavedCampaigns: jest.fn(),
@@ -43,6 +47,10 @@ const sales = {
 };
 
 beforeEach(() => {
+  require('../utils/gmailApi').getGmailStatus.mockResolvedValue({
+    connected: true,
+    revocation_pending: false,
+  });
   listCampaigns.mockResolvedValue([]);
   api.listSavedCampaigns.mockResolvedValue([sales]);
   api.loadSavedCampaign.mockResolvedValue(sales);

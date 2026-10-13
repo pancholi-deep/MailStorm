@@ -1,6 +1,13 @@
 import React from 'react';
 
-export default function SendBar({ user, sending, editorBusy, handleReset, handleCancelSending }) {
+export default function SendBar({
+  user,
+  sending,
+  editorBusy,
+  gmailConnected = true,
+  handleReset,
+  handleCancelSending,
+}) {
   return (
     <div className="send-bar">
       <div className="sender-info">
@@ -22,7 +29,11 @@ export default function SendBar({ user, sending, editorBusy, handleReset, handle
             Reset
           </button>
         )}
-        <button type="submit" className="ws-button primary send-button" disabled={editorBusy}>
+        <button
+          type="submit"
+          className="ws-button primary send-button"
+          disabled={editorBusy || !gmailConnected}
+        >
           {sending ? 'Sending…' : 'Send Emails'}
           <span aria-hidden="true">↗</span>
         </button>

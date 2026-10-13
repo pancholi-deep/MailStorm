@@ -6,7 +6,7 @@ import uuid
 from sqlalchemy import select, update, func
 from fastapi import HTTPException
 from backend.core.config import settings
-from backend.jobs.database import campaigns, uploads, recipients
+from backend.jobs.database import authorizations, campaigns, uploads, recipients
 from backend.jobs.state import ACTIVE, STATE_COLUMNS, STATUS_FIELDS
 
 
@@ -50,6 +50,8 @@ class CampaignRepository:
                         409, "This batch identifier belongs to different message content."
                     )
                 return existing["id"]
+            if not db.scalar(select(authorizations.c.owner).where(authorizations.c.owner == owner)):
+                raise HTTPException(409, "Gmail is disconnected. Sign in again before sending.")
             count = lambda condition: db.scalar(
                 select(func.count())
                 .select_from(campaigns)
@@ -177,6 +179,8 @@ class CampaignRepository:
                 raise HTTPException(409, "Correct the file and create a new campaign")
             if row["lease_until"] > now:
                 raise HTTPException(409, "Campaign is still stopping")
+            if not db.scalar(select(authorizations.c.owner).where(authorizations.c.owner == owner)):
+                raise HTTPException(409, "Gmail is disconnected. Sign in again before sending.")
             # Unknown and permanent failures are never automatically replayed.
             db.execute(
                 update(campaigns)

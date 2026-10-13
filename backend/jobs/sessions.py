@@ -5,7 +5,7 @@ import secrets
 from sqlalchemy import select, update, delete
 from fastapi import HTTPException
 from backend.core.config import settings
-from backend.jobs.database import connections, sessions, campaigns
+from backend.jobs.database import accounts, authorizations, sessions, campaigns
 
 
 class SessionRepository:
@@ -19,34 +19,59 @@ class SessionRepository:
         with self.database.transaction() as db:
             now = self.database.now(db)
             existing = (
-                db.execute(select(connections).where(connections.c.owner == owner))
+                db.execute(select(accounts).where(accounts.c.owner == owner)).mappings().first()
+            )
+            if existing and existing["disconnect_until"] > now:
+                raise HTTPException(
+                    409, "Gmail disconnection is in progress. Please try again shortly."
+                )
+            grant = (
+                db.execute(select(authorizations).where(authorizations.c.owner == owner))
                 .mappings()
                 .first()
             )
-            old = self.vault.open(existing["secret"]) if existing else {}
+            old = self.vault.open(grant["secret"]) if grant else {}
+            version = (
+                max(existing["version"] if existing else 0, grant["version"] if grant else 0) + 1
+            )
             value = {
                 "token": token,
                 "refresh_token": refresh_token or old.get("refresh_token"),
                 "expires_at": expires_at,
-                "name": info.get("name", ""),
-                "email": info["email"],
             }
+            profile = {"name": info.get("name", ""), "email": info["email"]}
             if existing:
                 db.execute(
-                    update(connections)
-                    .where(connections.c.owner == owner)
+                    update(accounts)
+                    .where(accounts.c.owner == owner)
                     .values(
-                        secret=self.vault.seal(value), version=existing["version"] + 1, updated=now
+                        secret=self.vault.seal(profile),
+                        version=version,
+                        updated=now,
+                        revocation_pending=False,
+                        disconnect_until=0,
                     )
                 )
             else:
                 db.execute(
-                    connections.insert().values(
+                    accounts.insert().values(
                         owner=owner,
-                        secret=self.vault.seal(value),
+                        secret=self.vault.seal(profile),
                         next_at=0,
                         updated=now,
-                        version=1,
+                        version=version,
+                    )
+                )
+            if grant:
+                db.execute(
+                    update(authorizations)
+                    .where(authorizations.c.owner == owner)
+                    .values(secret=self.vault.seal(value), version=version, updated=now)
+                )
+            else:
+                db.execute(
+                    authorizations.insert().values(
+                        owner=owner, secret=self.vault.seal(value), version=version, updated=now
                     )
                 )
             db.execute(
@@ -58,7 +83,11 @@ class SessionRepository:
             )
             db.execute(
                 update(campaigns)
-                .where(campaigns.c.owner == owner, campaigns.c.state == "awaiting_auth")
+                .where(
+                    campaigns.c.owner == owner,
+                    campaigns.c.state == "awaiting_auth",
+                    campaigns.c.cancel_requested == False,
+                )
                 .values(state="queued", next_at=now, updated=now, error=None)
             )
         return session
